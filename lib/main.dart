@@ -1,0 +1,46 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'core/theme/app_theme.dart';
+import 'core/routing/app_router.dart';
+import 'core/storage/local_storage.dart';
+import 'l10n/app_localizations.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await LocalStorage.instance.init();
+  runApp(const ProviderScope(child: ProcureFlowApp()));
+}
+
+class ProcureFlowApp extends ConsumerWidget {
+  const ProcureFlowApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Safe read without throwing if not initialized (tests)
+    String lang = 'en';
+    try {
+      lang = LocalStorage.instance.languageCode;
+    } catch (_) {
+      lang = 'en';
+    }
+    return MaterialApp.router(
+      title: 'ProcureFlow',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      routerConfig: AppRouter.router,
+      locale: Locale(lang),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('hi'),
+        Locale('ta'),
+      ],
+    );
+  }
+}
