@@ -537,6 +537,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Estimated waiting time'**
   String get waitingTimePrediction;
+
+  /// No description provided for @booking.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking'**
+  String get booking;
+
+  /// No description provided for @navHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get navHome;
+
+  /// No description provided for @navCentres.
+  ///
+  /// In en, this message translates to:
+  /// **'Centres'**
+  String get navCentres;
+
+  /// No description provided for @navBooking.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking'**
+  String get navBooking;
+
+  /// No description provided for @navToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Token'**
+  String get navToken;
+
+  /// No description provided for @navQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get navQueue;
+
+  /// No description provided for @navProcurement.
+  ///
+  /// In en, this message translates to:
+  /// **'Procurement'**
+  String get navProcurement;
+
+  /// No description provided for @navPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment'**
+  String get navPayment;
+
+  /// No description provided for @navNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get navNotifications;
+
+  /// No description provided for @navAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get navAssistant;
+
+  /// No description provided for @navProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get navProfile;
+
+  /// No description provided for @navSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get navSettings;
+
+  /// No description provided for @errorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Something went wrong'**
+  String get errorTitle;
+
+  /// No description provided for @errorRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get errorRetry;
+
+  /// No description provided for @emptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get emptyTitle;
+
+  /// No description provided for @loading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading...'**
+  String get loading;
+
+  /// No description provided for @arrived.
+  ///
+  /// In en, this message translates to:
+  /// **'ARRIVED'**
+  String get arrived;
+
+  /// No description provided for @cancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'CANCELLED'**
+  String get cancelled;
+
+  /// No description provided for @bookingConfirmed.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking Confirmed'**
+  String get bookingConfirmed;
+
+  /// No description provided for @paymentPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Pending'**
+  String get paymentPending;
 }
 
 class _AppLocalizationsDelegate

@@ -60,6 +60,10 @@ class Farmer {
       );
 }
 
+/// Spec requires `User` model - AppUser is the implementation.
+/// Keep AppUser for repository clarity, expose User as spec name.
+typedef User = AppUser;
+
 class AppUser {
   final String id;
   final String mobile;

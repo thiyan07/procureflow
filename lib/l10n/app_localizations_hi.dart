@@ -243,4 +243,64 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get waitingTimePrediction => 'अनुमानित प्रतीक्षा समय';
+
+  @override
+  String get booking => 'बुकिंग';
+
+  @override
+  String get navHome => 'होम';
+
+  @override
+  String get navCentres => 'केंद्र';
+
+  @override
+  String get navBooking => 'बुकिंग';
+
+  @override
+  String get navToken => 'टोकन';
+
+  @override
+  String get navQueue => 'कतार';
+
+  @override
+  String get navProcurement => 'खरीद';
+
+  @override
+  String get navPayment => 'भुगतान';
+
+  @override
+  String get navNotifications => 'सूचनाएं';
+
+  @override
+  String get navAssistant => 'सहायक';
+
+  @override
+  String get navProfile => 'प्रोफाइल';
+
+  @override
+  String get navSettings => 'सेटिंग्स';
+
+  @override
+  String get errorTitle => 'कुछ गलत हो गया';
+
+  @override
+  String get errorRetry => 'पुनः प्रयास';
+
+  @override
+  String get emptyTitle => 'कोई डेटा नहीं';
+
+  @override
+  String get loading => 'लोड हो रहा है...';
+
+  @override
+  String get arrived => 'पहुंच गए';
+
+  @override
+  String get cancelled => 'रद्द';
+
+  @override
+  String get bookingConfirmed => 'बुकिंग पुष्टि';
+
+  @override
+  String get paymentPending => 'भुगतान लंबित';
 }

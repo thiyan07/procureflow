@@ -28,6 +28,8 @@ class ProcureFlowApp extends ConsumerWidget {
       title: 'ProcureFlow',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
       routerConfig: AppRouter.router,
       locale: Locale(lang),
       localizationsDelegates: const [

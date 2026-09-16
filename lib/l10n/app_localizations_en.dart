@@ -243,4 +243,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get waitingTimePrediction => 'Estimated waiting time';
+
+  @override
+  String get booking => 'Booking';
+
+  @override
+  String get navHome => 'Home';
+
+  @override
+  String get navCentres => 'Centres';
+
+  @override
+  String get navBooking => 'Booking';
+
+  @override
+  String get navToken => 'Token';
+
+  @override
+  String get navQueue => 'Queue';
+
+  @override
+  String get navProcurement => 'Procurement';
+
+  @override
+  String get navPayment => 'Payment';
+
+  @override
+  String get navNotifications => 'Notifications';
+
+  @override
+  String get navAssistant => 'Assistant';
+
+  @override
+  String get navProfile => 'Profile';
+
+  @override
+  String get navSettings => 'Settings';
+
+  @override
+  String get errorTitle => 'Something went wrong';
+
+  @override
+  String get errorRetry => 'Retry';
+
+  @override
+  String get emptyTitle => 'No data';
+
+  @override
+  String get loading => 'Loading...';
+
+  @override
+  String get arrived => 'ARRIVED';
+
+  @override
+  String get cancelled => 'CANCELLED';
+
+  @override
+  String get bookingConfirmed => 'Booking Confirmed';
+
+  @override
+  String get paymentPending => 'Payment Pending';
 }

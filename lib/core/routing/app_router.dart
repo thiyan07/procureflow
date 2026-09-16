@@ -25,9 +25,12 @@ class AppRouter {
       GoRoute(path: '/splash', builder: (c, s) => const SplashScreen()),
       GoRoute(path: '/login', builder: (c, s) => const LoginScreen()),
       GoRoute(path: '/register', builder: (c, s) => const RegisterScreen()),
-      // Farmer shell
+      // Farmer
       GoRoute(path: '/', builder: (c, s) => const FarmerHomeScreen()),
+      GoRoute(path: '/home', builder: (c, s) => const FarmerHomeScreen()),
       GoRoute(path: '/centres', builder: (c, s) => const CentresScreen()),
+      // Booking aliases: spec /booking and legacy /slots
+      GoRoute(path: '/booking', builder: (c, s) => const SlotBookingScreen()),
       GoRoute(path: '/slots', builder: (c, s) => const SlotBookingScreen()),
       GoRoute(path: '/token', builder: (c, s) => const TokenScreen()),
       GoRoute(path: '/queue', builder: (c, s) => const QueueScreen()),
@@ -37,9 +40,12 @@ class AppRouter {
       GoRoute(path: '/assistant', builder: (c, s) => const AssistantScreen()),
       GoRoute(path: '/profile', builder: (c, s) => const ProfileScreen()),
       GoRoute(path: '/settings', builder: (c, s) => const SettingsScreen()),
-      // Operator
+      // Operator per spec
       GoRoute(path: '/operator', builder: (c, s) => const OperatorDashboardScreen()),
       GoRoute(path: '/operator/queue', builder: (c, s) => const OperatorQueueScreen()),
+      GoRoute(path: '/operator/procurement', builder: (c, s) => const ProcurementScreen()),
+      GoRoute(path: '/operator/analytics', builder: (c, s) => const AnalyticsScreen()),
+      // Legacy alias for analytics
       GoRoute(path: '/analytics', builder: (c, s) => const AnalyticsScreen()),
     ],
     errorBuilder: (c, s) => Scaffold(body: Center(child: Text(s.error.toString()))),

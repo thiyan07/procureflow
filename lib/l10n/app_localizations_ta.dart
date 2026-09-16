@@ -243,4 +243,64 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get waitingTimePrediction => 'மதிப்பிடப்பட்ட காத்திருப்பு நேரம்';
+
+  @override
+  String get booking => 'முன்பதிவு';
+
+  @override
+  String get navHome => 'முகப்பு';
+
+  @override
+  String get navCentres => 'மையங்கள்';
+
+  @override
+  String get navBooking => 'முன்பதிவு';
+
+  @override
+  String get navToken => 'டோக்கன்';
+
+  @override
+  String get navQueue => 'வரிசை';
+
+  @override
+  String get navProcurement => 'கொள்முதல்';
+
+  @override
+  String get navPayment => 'பணம்';
+
+  @override
+  String get navNotifications => 'அறிவிப்புகள்';
+
+  @override
+  String get navAssistant => 'உதவியாளர்';
+
+  @override
+  String get navProfile => 'சுயவிவரம்';
+
+  @override
+  String get navSettings => 'அமைப்புகள்';
+
+  @override
+  String get errorTitle => 'ஏதோ தவறு நடந்தது';
+
+  @override
+  String get errorRetry => 'மீண்டும் முயற்சிக்கவும்';
+
+  @override
+  String get emptyTitle => 'தரவு இல்லை';
+
+  @override
+  String get loading => 'ஏற்றுகிறது...';
+
+  @override
+  String get arrived => 'வந்துவிட்டது';
+
+  @override
+  String get cancelled => 'ரத்து செய்யப்பட்டது';
+
+  @override
+  String get bookingConfirmed => 'முன்பதிவு உறுதி';
+
+  @override
+  String get paymentPending => 'பணம் நிலுவையில்';
 }
