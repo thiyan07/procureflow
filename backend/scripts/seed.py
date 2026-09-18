@@ -23,13 +23,14 @@ def run():
         if db.query(ProcurementCentre).count() > 0:
             print("Already seeded, skipping")
             return
-        # Real MSP as per Cabinet / PIB 2025-26 KMS (TNCSC DPC procurement)
-        # Sources: pib.gov.in PRID 2131983 (2025-26) & PRID 2026698 (2024-25)
-        # Paddy Common Rs 2369, Grade A Rs 2389; Ragi Rs 4886; Maize Rs 2400 etc.
+        # Real MSP as per Cabinet / PIB 2026-27 KMS (latest as of 2026-09-18)
+        # Sources: PIB PRID 2260618 (2026-27, May 13 2026) + desagri.gov.in MSP Notifications Kharif 2026-27
+        # Paddy Common Rs 2441 (+72), Grade A Rs 2461 (+72), Ragi Rs 4886, Maize Rs 2400 approx; Tur Rs 8000
+        # Previous 2025-26 was 2369/2389 - now superseded
         comms = [
-            Commodity(name="Paddy", code="PADDY", rate_per_quintal=2369),  # Common - most procured in Tamil Nadu DPCs
-            Commodity(name="Paddy Grade A", code="PADDY-A", rate_per_quintal=2389),
-            Commodity(name="Ragi", code="RAGI", rate_per_quintal=4886),  # MSP 2025-26 KMS
+            Commodity(name="Paddy", code="PADDY", rate_per_quintal=2441),  # Common - most procured in Tamil Nadu DPCs - KMS 2026-27
+            Commodity(name="Paddy Grade A", code="PADDY-A", rate_per_quintal=2461),  # KMS 2026-27
+            Commodity(name="Ragi", code="RAGI", rate_per_quintal=4886),  # MSP 2025-26 KMS (unchanged ref)
             Commodity(name="Maize", code="MAIZE", rate_per_quintal=2400),
             Commodity(name="Pulses (Tur)", code="PULSES-TUR", rate_per_quintal=8000),
         ]
@@ -89,8 +90,8 @@ def run():
             db.flush()
             db.add(QueueEvent(token_id=qt.id, from_status=None, to_status=QueueStatus.WAITING.value))
             db.add(Procurement(id=str(uuid.uuid4()), booking_id=b.id, stage=ProcurementStage.BOOKING_CONFIRMED.value))
-            # MSP 2025-26 Paddy Common 2369
-            db.add(Payment(id=str(uuid.uuid4()), booking_id=b.id, commodity="Paddy", quantity_quintal=18.5, rate_per_quintal=2369, total_amount=43826.5, status=PaymentStatus.PENDING.value))
+            # MSP 2026-27 Paddy Common 2441 (latest Cabinet May 13 2026)
+            db.add(Payment(id=str(uuid.uuid4()), booking_id=b.id, commodity="Paddy", quantity_quintal=18.5, rate_per_quintal=2441, total_amount=45158.5, status=PaymentStatus.PENDING.value))
         db.commit()
         print("Seed completed")
     finally:

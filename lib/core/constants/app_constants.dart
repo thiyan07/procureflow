@@ -19,8 +19,9 @@ class AppConstants {
   static const int avgProcessingMinutes = 3;
   static const int defaultCounters = 3;
 
-  // Real MSP commodities (2025-26 KMS, TNCSC DPC)
-  // Rates in seed: Paddy 2369, Paddy Grade A 2389, Ragi 4886, Maize 2400, Pulses Tur 8000
+  // Real MSP commodities (KMS 2026-27 latest, Cabinet May 13 2026)
+  // Rates in seed: Paddy 2441, Paddy Grade A 2461 (+72 vs 2025-26), Ragi 4886, Maize 2400, Pulses Tur 8000
+  // Source: PIB PRID 2260618, agriwelfare 2026-27 PDF, S&P Global May 13 2026
   static const List<String> commodities = [
     'Paddy',
     'Paddy Grade A',
@@ -29,8 +30,8 @@ class AppConstants {
     'Pulses (Tur)',
   ];
   static const Map<String, double> mspRates = {
-    'Paddy': 2369,
-    'Paddy Grade A': 2389,
+    'Paddy': 2441,
+    'Paddy Grade A': 2461,
     'Ragi': 4886,
     'Maize': 2400,
     'Pulses (Tur)': 8000,
