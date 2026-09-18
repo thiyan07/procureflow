@@ -43,3 +43,16 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Backend
+backend/.env
+backend/__pycache__/
+backend/.pytest_cache/
+backend/*.db
+backend/alembic/__pycache__/
+**/__pycache__/
+.env
+firebase-service-account.json
+google-services.json
+*.jks
+*.keystore

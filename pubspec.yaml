@@ -18,6 +18,10 @@ dependencies:
   intl: ^0.20.2
   fl_chart: ^0.68.0
   qr_flutter: ^4.1.0
+  http: ^1.2.2
+  # Firebase messaging - enable when configuring FCM (see backend/backend README)
+  # firebase_core: ^2.24.0
+  # firebase_messaging: ^14.7.0
 
 dev_dependencies:
   flutter_test:

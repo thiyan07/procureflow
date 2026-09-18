@@ -10,7 +10,8 @@ class DemoConfig {
   /// Set to false when backend (FastAPI) is ready.
   /// When false, repository providers should return Api* implementations
   /// instead of Mock* (see lib/services/providers.dart).
-  static const bool useMockBackend = true;
+  /// Override via --dart-define=USE_MOCK=false
+  static const bool useMockBackend = bool.fromEnvironment('USE_MOCK', defaultValue: false);
 
   /// Mock OTP for development - NEVER use in production.
   static const String demoOtp = '123456';
@@ -28,7 +29,9 @@ class DemoConfig {
   static const bool enableMockNotifications = true;
 
   /// Production placeholders - to be filled via --dart-define
-  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://api.procureflow.gov.in');
+  /// Default to localhost:8000 for local dev; override with API_BASE_URL for prod.
+  /// For Android emulator, pass --dart-define=API_BASE_URL=http://10.0.2.2:8000
+  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000');
   static const String apiKey = String.fromEnvironment('API_KEY', defaultValue: '');
 
   static bool get isDemoMode => useMockBackend;

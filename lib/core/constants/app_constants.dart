@@ -19,14 +19,22 @@ class AppConstants {
   static const int avgProcessingMinutes = 3;
   static const int defaultCounters = 3;
 
-  // Commodities
+  // Real MSP commodities (2025-26 KMS, TNCSC DPC)
+  // Rates in seed: Paddy 2369, Paddy Grade A 2389, Ragi 4886, Maize 2400, Pulses Tur 8000
   static const List<String> commodities = [
     'Paddy',
-    'Wheat',
-    'Onion',
-    'Millet',
-    'Pulses',
+    'Paddy Grade A',
+    'Ragi',
+    'Maize',
+    'Pulses (Tur)',
   ];
+  static const Map<String, double> mspRates = {
+    'Paddy': 2369,
+    'Paddy Grade A': 2389,
+    'Ragi': 4886,
+    'Maize': 2400,
+    'Pulses (Tur)': 8000,
+  };
 }
 
 enum UserRole { farmer, centreOperator, admin }

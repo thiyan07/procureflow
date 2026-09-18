@@ -1,0 +1,159 @@
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.api.deps import get_current_user
+from app.models.user import User
+from app.models.booking import Booking
+from app.models.farmer import Farmer
+from app.models.procurement_centre import ProcurementCentre
+from app.models.queue import QueueToken, QueueEvent, QueueStatus
+from app.models.notification import Notification
+from app.schemas.queue import QueueStatusOut, QueueTransitionRequest
+from app.services.queue_service import transition_queue, estimate_wait
+from app.services.notification_service import create_notification
+from app.core.config import get_settings
+from datetime import date
+import json
+import asyncio
+
+router = APIRouter()
+
+# In-memory ws manager (simple)
+class WSManager:
+    def __init__(self):
+        self.connections: dict[str, list[WebSocket]] = {}
+    async def connect(self, booking_id: str, ws: WebSocket):
+        await ws.accept()
+        self.connections.setdefault(booking_id, []).append(ws)
+    def disconnect(self, booking_id: str, ws: WebSocket):
+        lst = self.connections.get(booking_id, [])
+        if ws in lst:
+            lst.remove(ws)
+    async def broadcast(self, booking_id: str, data: dict):
+        for ws in self.connections.get(booking_id, []):
+            try:
+                await ws.send_json(data)
+            except:
+                pass
+
+ws_manager = WSManager()
+
+@router.post("/dev/advance")
+def dev_advance_centre(centre_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Dev-only: advance queue for a centre (call next waiting token). Modifies backend state."""
+    settings = get_settings()
+    if not settings.is_dev:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Dev only"})
+    # Only operator/admin allowed
+    if user.role not in ("CENTRE_OPERATOR", "ADMIN", "FARMER"):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Not authorized"})
+    from app.models.queue import CentreQueueState
+    today = date.today().isoformat()
+    # Find next WAITING ordered by position
+    token = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status==QueueStatus.WAITING.value).order_by(QueueToken.position).first()
+    if not token:
+        return {"message": "No waiting tokens", "centre_id": centre_id}
+    try:
+        transition_queue(db, token, QueueStatus.CALLED.value, actor=user.id)
+        booking = db.get(Booking, token.booking_id)
+        if booking:
+            farmer = db.get(Farmer, booking.farmer_id)
+            if farmer:
+                create_notification(db, farmer.user_id, "Token Called", f"Token {token.token_number} is next. Please proceed to counter.", "token_called", {"booking_id": token.booking_id})
+        # update centre queue state current_ordinal
+        qstate = db.query(CentreQueueState).filter(CentreQueueState.centre_id==centre_id, CentreQueueState.date==today).with_for_update().first()
+        if qstate:
+            qstate.current_ordinal = token.position
+        db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_TRANSITION", "message": str(e)})
+    return {"message": "Advanced", "token_number": token.token_number, "position": token.position, "status": token.status}
+
+@router.get("/dev/status")
+def dev_queue_status(centre_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    settings = get_settings()
+    if not settings.is_dev:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Dev only"})
+    tokens = db.query(QueueToken).filter(QueueToken.centre_id==centre_id).order_by(QueueToken.position).all()
+    return [{"token_number": t.token_number, "position": t.position, "status": t.status, "booking_id": t.booking_id} for t in tokens]
+
+@router.get("/centre/{centre_id}")
+def list_centre_queue(centre_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Operator or any authenticated can view centre queue
+    tokens = db.query(QueueToken).filter(QueueToken.centre_id==centre_id).order_by(QueueToken.position).all()
+    # Join booking info
+    out=[]
+    for t in tokens:
+        booking = db.get(Booking, t.booking_id)
+        farmer = db.get(Farmer, booking.farmer_id) if booking else None
+        out.append({"token_number": t.token_number, "position": t.position, "status": t.status, "booking_id": t.booking_id, "farmer_name": farmer.full_name if farmer else None, "commodity": booking.commodity_name if booking else None, "quantity": booking.estimated_quantity if booking else None, "created_at": t.created_at.isoformat() if t.created_at else None})
+    return out
+
+def _get_token_for_booking(db: Session, booking_id: str, user: User) -> QueueToken:
+    booking = db.get(Booking, booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Booking not found"})
+    # auth: owner or operator
+    farmer = db.query(Farmer).filter(Farmer.user_id == user.id).first()
+    is_owner = farmer and booking.farmer_id == farmer.id
+    is_operator = user.role in ("CENTRE_OPERATOR", "ADMIN")
+    if not (is_owner or is_operator):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Not authorized"})
+    qt = db.query(QueueToken).filter(QueueToken.booking_id == booking_id).first()
+    if not qt:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Queue token not found"})
+    return qt
+
+@router.get("/{booking_id}", response_model=QueueStatusOut)
+def get_queue_status(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    qt = _get_token_for_booking(db, booking_id, user)
+    booking = db.get(Booking, booking_id)
+    centre = db.get(ProcurementCentre, qt.centre_id)
+    # farmers ahead: tokens with smaller position and waiting/called
+    ahead = db.query(QueueToken).filter(QueueToken.centre_id == qt.centre_id, QueueToken.position < qt.position, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value, QueueStatus.PROCESSING.value])).count()
+    est = estimate_wait(ahead, centre.avg_processing_minutes if centre else 3, centre.active_counters if centre and centre.active_counters else 3)
+    return QueueStatusOut(booking_id=booking_id, token_number=qt.token_number, queue_position=qt.position, farmers_ahead=ahead, estimated_wait_minutes=est, status=qt.status, debug={"ahead": ahead, "avg_processing": centre.avg_processing_minutes if centre else 3, "counters": centre.active_counters if centre else 3})
+
+@router.post("/{booking_id}/transition")
+def transition(booking_id: str, payload: QueueTransitionRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Only operator/admin can transition, except farmer can set ARRIVED? allow farmer ARRIVED
+    qt = _get_token_for_booking(db, booking_id, user)
+    is_operator = user.role in ("CENTRE_OPERATOR", "ADMIN")
+    if not is_operator and payload.to_status not in (QueueStatus.ARRIVED.value, QueueStatus.CANCELLED.value):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Only operator can transition"})
+    try:
+        transition_queue(db, qt, payload.to_status, actor=user.id)
+        # notification for important transitions
+        booking = db.get(Booking, booking_id)
+        farmer = db.get(Farmer, booking.farmer_id) if booking else None
+        if farmer and payload.to_status == QueueStatus.CALLED.value:
+            create_notification(db, farmer.user_id, "Token Called", f"Token {qt.token_number} is next. Please proceed to counter.", "token_called", {"booking_id": booking_id})
+        elif farmer and payload.to_status == QueueStatus.PROCESSING.value:
+            create_notification(db, farmer.user_id, "Processing Started", f"Token {qt.token_number} now processing.", "queue_position_changed", {"booking_id": booking_id})
+        db.commit()
+        # broadcast ws
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(ws_manager.broadcast(booking_id, {"status": qt.status, "token": qt.token_number}))
+        except:
+            pass
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_TRANSITION", "message": str(e)})
+    return {"message": "Transition ok", "status": qt.status}
+
+@router.get("/{booking_id}/events")
+def get_events(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    qt = _get_token_for_booking(db, booking_id, user)
+    events = db.query(QueueEvent).filter(QueueEvent.token_id == qt.id).order_by(QueueEvent.created_at).all()
+    return [{"id": e.id, "from_status": e.from_status, "to_status": e.to_status, "created_at": e.created_at} for e in events]
+
+@router.websocket("/ws/{booking_id}")
+async def ws_queue(websocket: WebSocket, booking_id: str):
+    await ws_manager.connect(booking_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()  # keep alive; ignore
+    except WebSocketDisconnect:
+        ws_manager.disconnect(booking_id, websocket)
