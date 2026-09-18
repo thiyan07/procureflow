@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../core/config/demo_config.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 import '../../../core/utils/date_utils.dart';
@@ -41,11 +42,11 @@ class FarmerHomeScreen extends ConsumerWidget {
             child: ListView(padding: const EdgeInsets.all(16), children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)),
+                decoration: BoxDecoration(color: DemoConfig.useMockBackend ? const Color(0xFFFFF3E0) : const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width:8,height:8,decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle)),
+                  Container(width:8,height:8,decoration: BoxDecoration(color: DemoConfig.useMockBackend ? Colors.orange : AppTheme.success, shape: BoxShape.circle)),
                   const SizedBox(width:6),
-                  const Text('DEMO MODE • Mock backend', style: TextStyle(fontSize:11, fontWeight: FontWeight.w600, color: AppTheme.primaryGreen)),
+                  Text(DemoConfig.useMockBackend ? 'DEMO MODE • Mock backend' : 'LIVE • TNCSC DPC • MSP 2025-26', style: TextStyle(fontSize:11, fontWeight: FontWeight.w600, color: DemoConfig.useMockBackend ? Colors.orange.shade800 : AppTheme.primaryGreen)),
                 ]),
               ),
               const SizedBox(height: 12),

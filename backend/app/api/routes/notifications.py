@@ -23,8 +23,10 @@ def register_device_token(payload: DeviceTokenRequest, db: Session = Depends(get
     return {"message": "Token registered", "token": dt.token}
 
 @router.get("", response_model=list[NotificationOut])
-def list_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    notifs = db.query(Notification).filter(Notification.user_id == user.id).order_by(desc(Notification.created_at)).limit(50).all()
+def list_notifications(limit: int = 50, offset: int = 0, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Pagination for notification history (default 50, prevents loading entire DB)
+    limit = min(max(limit, 1), 100)
+    notifs = db.query(Notification).filter(Notification.user_id == user.id).order_by(desc(Notification.created_at)).limit(limit).offset(offset).all()
     return notifs
 
 @router.post("/{notification_id}/read")

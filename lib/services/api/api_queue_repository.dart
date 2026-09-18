@@ -47,11 +47,20 @@ class ApiQueueRepository implements QueueRepository {
     }
   }
 
+  // Real operator: list centre queue (used by operator screens)
+  Future<List<Map<String, dynamic>>> getCentreQueue(String centreId) async {
+    final list = await _client.getList('/api/v1/queue/centre/$centreId');
+    return list.cast<Map<String, dynamic>>();
+  }
+
+  // Dashboard stats for operator
+  Future<Map<String, dynamic>> getDashboard(String centreId) async {
+    return await _client.get('/api/v1/centres/$centreId/dashboard');
+  }
+
   @override
   Future<void> callNext(String centreId) async {
-    // Operator action - not directly exposed as queue endpoint; use booking transition for next token
-    // Placeholder: fetch waiting tokens and call first. For now no-op via backend future.
-    await _client.post('/api/v1/queue/call-next', body: {'centre_id': centreId});
+    await _client.post('/api/v1/queue/dev/advance', query: {'centre_id': centreId});
   }
 
   @override
