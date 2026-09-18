@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, date, time
-from sqlalchemy import String, Date, Time, Integer, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Date, Time, Integer, DateTime, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 import enum
@@ -12,7 +12,10 @@ class SlotStatus(str, enum.Enum):
 
 class Slot(Base):
     __tablename__ = "slots"
-    __table_args__ = (UniqueConstraint("centre_id", "date", "start_time", name="uq_slot_centre_date_time"),)
+    __table_args__ = (
+        UniqueConstraint("centre_id", "date", "start_time", name="uq_slot_centre_date_time"),
+        CheckConstraint("booked >= 0 AND booked <= capacity", name="ck_slot_booked_capacity"),
+    )
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     centre_id: Mapped[str] = mapped_column(String, ForeignKey("procurement_centres.id", ondelete="CASCADE"), index=True, nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)

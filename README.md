@@ -1,17 +1,93 @@
-# procureflow
+# ProcureFlow — Smart Procurement Centre Management (SIH26032)
 
-A new Flutter project.
+**Flutter + FastAPI + PostgreSQL/SQLite + Firebase Cloud Messaging + Rule-Based Scheduling**
 
-## Getting Started
+Tamil Nadu Civil Supplies Corporation (TNCSC) Direct Purchase Centres (DPC) for Erode district. Real MSP KMS 2026-27: Paddy Common ₹2441, Grade A ₹2461 (PIB PRID 2260618 May 13 2026).
 
-This project is a starting point for a Flutter application.
+## Architecture
+- **Flutter** (`lib/`) Riverpod + GoRouter, l10n en/ta/hi, `DemoConfig` mock/api dual mode (`USE_MOCK` dart-define)
+- **FastAPI** (`backend/app/main.py` v1.0.0) JWT HS256, 9 routers `/api/v1/*`
+- **PostgreSQL** (prod) / **SQLite** fallback (`backend/dev.db`) — 17 tables: users→farmers→bookings→slots→queue_tokens→procurements→payments→notifications
+- **FCM** `backend/app/integrations/firebase/fcm_service.py` mock fallback when `FCM_*` empty
+- **Scheduler** `backend/app/services/scheduling_service.py` deterministic 10-rule engine, no ML
 
-A few resources to get you started if this is your first Flutter project:
+## Flutter Setup
+```bash
+flutter --version # 3.44.7 Dart 3.12.2
+flutter pub get
+# API mode (default): backend at 127.0.0.1:8000
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000
+# Android emulator:
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+# Mock mode:
+flutter run --dart-define=USE_MOCK=true
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Backend Setup
+```bash
+cd backend
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+# .env (see .env.example) — sqlite for dev, postgres for prod:
+# database_url=sqlite:////home/thiyan/projects/ece/backend/dev.db
+# database_url=postgresql+psycopg://procureflow:procureflow@localhost:5432/procureflow
+# jwt_secret=change-me-dev-secret-at-least-32-chars-long
+# fcm_project_id= / fcm_client_email= / fcm_private_key= (mock if empty)
+python -m scripts.seed
+PYTHONPATH=backend python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+# docs: http://127.0.0.1:8000/docs  health: /health
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## PostgreSQL Setup
+- Dev: sqlite auto (`Base.metadata.create_all` if `environment=development`)
+- Prod: `psql`, `alembic upgrade head` (stub `001_initial` → `SELECT 1`, generate via `alembic revision --autogenerate`)
+- Erode: 2 divisions (Erode/Gobichettipalayam) 10 taluks 375 villages — 4 DPCs seeded.
+
+## Environment Variables
+| key | example | notes |
+|---|---|---|
+| `database_url` | `sqlite:////.../dev.db` or `postgresql+psycopg://...` | .env |
+| `jwt_secret` | `change-me...` | 32+ chars |
+| `jwt_algorithm` | `HS256` | |
+| `otp_fixed_code` | `123456` | mock OTP |
+| `fcm_project_id` etc | `` | empty → mock |
+| `API_BASE_URL` | `http://127.0.0.1:8000` | dart-define |
+
+## Firebase/FCM Setup
+1. Firebase console → project → service account JSON
+2. Set `FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`, `FCM_PRIVATE_KEY` (escaped `\n`) in `backend/.env`
+3. Flutter `pubspec.yaml` uncomment `firebase_core/messaging` when credentials ready
+4. `POST /api/v1/notifications/device-token` dedup, `GET /notifications` pagination `?limit&offset`, mock logs `[FCM-MOCK]` if no creds — never commit JSON.
+
+## How to Run Backend
+```bash
+PYTHONPATH=backend python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+## How to Run Flutter
+```bash
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8000
+```
+
+## Demo Accounts
+- Farmer: `9876543210` / OTP `123456` (TNCSC DPC)
+- Operator: `9876543211` / `123456`
+- Any new mobile via `POST /auth/verify-otp` auto-creates `FARMER` (admin `9999999999`)
+
+## Test Commands
+```bash
+cd backend && python -m pytest tests -v # 19 tests
+flutter analyze # 30 infos, 0 errors
+flutter test    # 14/15 pass (1 widget OTP label)
+flutter build apk --debug # 37.8s, needs ~1G free
+```
+
+## Rule-Based Scheduling
+`backend/app/services/scheduling_service.py` 10 rules: 1 full reject, 2 hours, 3 occupancy `booked/capacity`, 4 quantity factor `1+(q-10)*0.02`, 5 capacity `load/counters`, 6 active counters, 7 safety buffer penalty, 8 duplicate (booking API), 9 past, 10 DB `FOR UPDATE`. Score `availability*congestion*load*time*buffer`, tie `start_time,id`, returns `recommended_slot, wait, reason "Lower expected centre load.", alternatives×3`. Deterministic, handles `counters=0` via fallback 1.
+
+## Known Limitations
+- SQLite dev: `SELECT FOR UPDATE` no-op → concurrent overbook possible (7/7 vs 5/5 expected); postgres enforces row lock + `ck_slot_booked_capacity`.
+- Alembic `001_initial` stub; prod needs `alembic revision --autogenerate`.
+- FCM mock unless credentials set.
+- Widget test `phase2_widget_test.dart:51` expects "Enter OTP" label mismatch (not blocking).
+- No real bank transfer (payment status only).
