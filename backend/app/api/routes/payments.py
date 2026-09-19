@@ -8,6 +8,7 @@ from app.models.farmer import Farmer
 from app.models.payment import Payment, PaymentStatus
 from app.schemas.payment import PaymentOut, PaymentStatusUpdate
 from app.services.notification_service import create_notification
+from app.services.audit_service import log_payment_updated
 
 router = APIRouter()
 
@@ -41,5 +42,6 @@ def update_status(booking_id: str, payload: PaymentStatusUpdate, db: Session = D
         farmer = db.get(Farmer, booking.farmer_id)
         if farmer:
             create_notification(db, farmer.user_id, "Payment Status Updated", f"Payment status: {payload.status}", "payment_status_updated", {"booking_id": booking_id, "status": payload.status})
+    log_payment_updated(db, user.id, booking_id, payload.status)
     db.commit()
     return {"message": "Payment status updated", "status": pay.status}

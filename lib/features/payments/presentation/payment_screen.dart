@@ -52,12 +52,39 @@ class PaymentScreen extends ConsumerWidget {
                     Expanded(child: Text(isCompleted? 'Payment completed and credited to your bank account.' : 'Payment processing. Will be credited within 48 hours after procurement.', style: TextStyle(color: isCompleted? const Color(0xFF1B5E20): const Color(0xFFE65100), fontSize:12))),
                   ]),
                 ),
+                const SizedBox(height:12),
+                AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+                  const Text('Payment Timeline', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height:8),
+                  _PayStep(title:'Booking Confirmed', subtitle:'Token generated', done:true, current:false),
+                  _PayStep(title:'Procurement', subtitle: booking.procurementStage.name, done: booking.procurementStage != ProcurementStage.bookingConfirmed, current: p.status==PaymentStatus.pending),
+                  _PayStep(title:'Payment Processing', subtitle:'Bank verification', done: p.status==PaymentStatus.processing || p.status==PaymentStatus.completed, current: p.status==PaymentStatus.processing),
+                  _PayStep(title:'Payment Completed', subtitle: p.transactionId ?? 'Awaiting credit', done: p.status==PaymentStatus.completed, current: p.status==PaymentStatus.completed),
+                ])),
               ]);
             },
           );
         },
       ),
     );
+  }
+}
+class _PayStep extends StatelessWidget{
+  final String title; final String subtitle; final bool done; final bool current;
+  const _PayStep({required this.title, required this.subtitle, required this.done, required this.current});
+  @override
+  Widget build(BuildContext context){
+    final color = done? const Color(0xFF2E7D32): current? const Color(0xFFEF6C00): Colors.grey;
+    final icon = done? Icons.check_circle: current? Icons.sync: Icons.radio_button_unchecked;
+    return Padding(padding: const EdgeInsets.symmetric(vertical:6), child: Row(children:[
+      Icon(icon, color: color, size:20),
+      const SizedBox(width:10),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+        Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize:12, color: done||current? Colors.black87: Colors.black45)),
+        Text(subtitle, style: const TextStyle(fontSize:11, color: Colors.black54)),
+      ])),
+      if (current) Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(20)), child: const Text('CURRENT', style: TextStyle(fontSize:9, fontWeight: FontWeight.w700, color: Color(0xFFEF6C00)))),
+    ]));
   }
 }
 class _Row extends StatelessWidget{

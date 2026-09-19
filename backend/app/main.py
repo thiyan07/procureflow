@@ -7,7 +7,7 @@ import uuid
 
 from app.core.config import get_settings
 from app.core.logging import setup_logging, request_id_ctx, user_id_ctx
-from app.api.routes import auth, farmers, centres, slots, bookings, queue, procurement, payments, notifications
+from app.api.routes import auth, farmers, centres, slots, bookings, queue, procurement, payments, notifications, ai, assistant, analytics, feedback
 from app.db.session import engine
 from app.db.base import Base
 
@@ -45,6 +45,10 @@ app.include_router(queue.router, prefix=f"{settings.api_v1_prefix}/queue", tags=
 app.include_router(procurement.router, prefix=f"{settings.api_v1_prefix}/procurements", tags=["procurements"])
 app.include_router(payments.router, prefix=f"{settings.api_v1_prefix}/payments", tags=["payments"])
 app.include_router(notifications.router, prefix=f"{settings.api_v1_prefix}/notifications", tags=["notifications"])
+app.include_router(ai.router, prefix=f"{settings.api_v1_prefix}/ai", tags=["ai"])
+app.include_router(assistant.router, prefix=f"{settings.api_v1_prefix}/assistant", tags=["assistant"])
+app.include_router(analytics.router, prefix=f"{settings.api_v1_prefix}/analytics", tags=["analytics"])
+app.include_router(feedback.router, prefix=f"{settings.api_v1_prefix}/feedback", tags=["feedback"])
 
 @app.get("/health")
 def health():

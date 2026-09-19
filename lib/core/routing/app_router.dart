@@ -17,6 +17,10 @@ import '../../features/assistant/presentation/assistant_screen.dart';
 import '../../features/staff/presentation/operator_dashboard_screen.dart';
 import '../../features/staff/presentation/operator_queue_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
+import '../../features/planner/presentation/day_planner_screen.dart';
+import '../../features/feedback/presentation/feedback_screen.dart';
+import '../../features/bookings/presentation/booking_history_screen.dart';
+import '../../features/receipt/presentation/receipt_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -38,6 +42,10 @@ class AppRouter {
       GoRoute(path: '/payment', builder: (c, s) => const PaymentScreen()),
       GoRoute(path: '/notifications', builder: (c, s) => const NotificationsScreen()),
       GoRoute(path: '/assistant', builder: (c, s) => const AssistantScreen()),
+      GoRoute(path: '/planner', builder: (c, s) => const DayPlannerScreen()),
+      GoRoute(path: '/feedback', builder: (c, s) => const FeedbackScreen()),
+      GoRoute(path: '/history', builder: (c, s) => const BookingHistoryScreen()),
+      GoRoute(path: '/receipt', builder: (c, s) => const ReceiptScreen()),
       GoRoute(path: '/profile', builder: (c, s) => const ProfileScreen()),
       GoRoute(path: '/settings', builder: (c, s) => const SettingsScreen()),
       // Operator per spec

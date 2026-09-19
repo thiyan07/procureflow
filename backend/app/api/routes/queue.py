@@ -11,6 +11,7 @@ from app.models.notification import Notification
 from app.schemas.queue import QueueStatusOut, QueueTransitionRequest
 from app.services.queue_service import transition_queue, estimate_wait
 from app.services.notification_service import create_notification
+from app.services.audit_service import log_token_called, log_arrived, log_processing_started, audit
 from app.core.config import get_settings
 from datetime import date
 import json
@@ -60,6 +61,7 @@ def dev_advance_centre(centre_id: str, db: Session = Depends(get_db), user: User
             farmer = db.get(Farmer, booking.farmer_id)
             if farmer:
                 create_notification(db, farmer.user_id, "Token Called", f"Token {token.token_number} is next. Please proceed to counter.", "token_called", {"booking_id": token.booking_id})
+        log_token_called(db, user.id, token.token_number, token.booking_id)
         # update centre queue state current_ordinal
         qstate = db.query(CentreQueueState).filter(CentreQueueState.centre_id==centre_id, CentreQueueState.date==today).with_for_update().first()
         if qstate:
@@ -112,6 +114,19 @@ def get_queue_status(booking_id: str, db: Session = Depends(get_db), user: User 
     # farmers ahead: tokens with smaller position and waiting/called
     ahead = db.query(QueueToken).filter(QueueToken.centre_id == qt.centre_id, QueueToken.position < qt.position, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value, QueueStatus.PROCESSING.value])).count()
     est = estimate_wait(ahead, centre.avg_processing_minutes if centre else 3, centre.active_counters if centre and centre.active_counters else 3)
+    # Turn approaching intelligence: threshold farmersAhead <=2 triggers notification once
+    if 0 < ahead <= 2 and qt.status == QueueStatus.WAITING.value:
+        from app.models.notification import Notification
+        exists = db.query(Notification).filter(Notification.user_id == booking.farmer.user_id if booking.farmer else None, Notification.type == "turn_approaching", Notification.data.like(f'%"{booking_id}"%')).first() if booking.farmer else None
+        if not exists:
+            try:
+                from app.services.notification_service import create_notification as cn
+                farmer = db.get(Farmer, booking.farmer_id) if booking else None
+                if farmer:
+                    cn(db, farmer.user_id, "Your turn is approaching", f"Token {qt.token_number} — {ahead} farmers ahead. Please proceed to centre.", "turn_approaching", {"booking_id": booking_id, "farmersAhead": ahead})
+                    db.commit()
+            except Exception:
+                pass
     return QueueStatusOut(booking_id=booking_id, token_number=qt.token_number, queue_position=qt.position, farmers_ahead=ahead, estimated_wait_minutes=est, status=qt.status, debug={"ahead": ahead, "avg_processing": centre.avg_processing_minutes if centre else 3, "counters": centre.active_counters if centre else 3})
 
 @router.post("/{booking_id}/transition")
@@ -123,13 +138,27 @@ def transition(booking_id: str, payload: QueueTransitionRequest, db: Session = D
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Only operator can transition"})
     try:
         transition_queue(db, qt, payload.to_status, actor=user.id)
-        # notification for important transitions
+        # notification + audit for important transitions
         booking = db.get(Booking, booking_id)
         farmer = db.get(Farmer, booking.farmer_id) if booking else None
         if farmer and payload.to_status == QueueStatus.CALLED.value:
             create_notification(db, farmer.user_id, "Token Called", f"Token {qt.token_number} is next. Please proceed to counter.", "token_called", {"booking_id": booking_id})
+            log_token_called(db, user.id, qt.token_number, booking_id)
+        elif farmer and payload.to_status == QueueStatus.ARRIVED.value:
+            log_arrived(db, user.id, booking_id)
         elif farmer and payload.to_status == QueueStatus.PROCESSING.value:
             create_notification(db, farmer.user_id, "Processing Started", f"Token {qt.token_number} now processing.", "queue_position_changed", {"booking_id": booking_id})
+            log_processing_started(db, user.id, booking_id)
+        elif payload.to_status == QueueStatus.NO_SHOW.value:
+            audit(db, user.id, "farmer_no_show", "queue_token", qt.id, f"Token {qt.token_number} marked NO_SHOW")
+            if farmer:
+                create_notification(db, farmer.user_id, "Marked No-Show", f"Token {qt.token_number} marked as no-show. Contact centre for reassignment.", "queue_position_changed", {"booking_id": booking_id})
+        elif payload.to_status == QueueStatus.ON_HOLD.value:
+            audit(db, user.id, "queue_on_hold", "queue_token", qt.id, f"Token {qt.token_number} ON_HOLD")
+        elif payload.to_status == QueueStatus.COMPLETED.value:
+            audit(db, user.id, "queue_completed", "queue_token", qt.id, f"Token {qt.token_number} COMPLETED")
+        elif payload.to_status == QueueStatus.CANCELLED.value:
+            audit(db, user.id, "queue_cancelled", "queue_token", qt.id, f"Token {qt.token_number} CANCELLED")
         db.commit()
         # broadcast ws
         import asyncio

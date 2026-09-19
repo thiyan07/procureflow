@@ -8,6 +8,7 @@ import '../../../core/config/demo_config.dart';
 import '../../../models/booking.dart';
 import '../../../services/mock/mock_database.dart';
 import '../../../services/api/api_queue_repository.dart';
+import '../../../core/network/api_client.dart';
 
 class OperatorQueueScreen extends ConsumerStatefulWidget {
   const OperatorQueueScreen({super.key});
@@ -32,6 +33,53 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
   Future<void> _updateBooking(String id, QueueStatus s) async{
     try{
       await ref.read(queueRepositoryProvider).updateQueueStatus(id, s);
+      setState((){});
+    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+  }
+  Future<void> _recordWeighment(String bookingId) async{
+    final ctrl = TextEditingController();
+    final grossCtrl = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (c)=> AlertDialog(
+      title: const Text('Record Weighment'),
+      content: Column(mainAxisSize: MainAxisSize.min, children:[
+        TextField(controller: ctrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Net weight (quintal)', hintText: '18.5')),
+        TextField(controller: grossCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Gross weight (optional)')),
+        const SizedBox(height:8),
+        const Text('Valid 0-500 quintal. Gross >= net. Demo only.', style: TextStyle(fontSize:11, color: Colors.black54)),
+      ]),
+      actions:[ TextButton(onPressed: ()=> Navigator.pop(c,false), child: const Text('Cancel')), FilledButton(onPressed: ()=> Navigator.pop(c,true), child: const Text('Save'))],
+    ));
+    if (ok!=true) return;
+    final net = double.tryParse(ctrl.text);
+    if (net==null || net<=0 || net>500){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid net weight 0-500'))); return; }
+    final gross = double.tryParse(grossCtrl.text);
+    try{
+      await ref.read(apiClientProvider).post('/api/v1/procurements/$bookingId/weighment', body:{'net_weight': net, if(gross!=null) 'gross_weight': gross});
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Weighment $net q recorded')));
+      setState((){});
+    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+  }
+  Future<void> _recordQuality(String bookingId) async{
+    String grade='A';
+    final moistureCtrl = TextEditingController();
+    final remarksCtrl = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (c)=> StatefulBuilder(builder:(c,setSt)=> AlertDialog(
+      title: const Text('Quality Assessment'),
+      content: Column(mainAxisSize: MainAxisSize.min, children:[
+        DropdownButtonFormField<String>(value: grade, decoration: const InputDecoration(labelText:'Grade'), items: const [DropdownMenuItem(value:'A',child: Text('A')), DropdownMenuItem(value:'B',child: Text('B')), DropdownMenuItem(value:'C',child: Text('C'))], onChanged:(v)=> setSt(()=> grade=v!)),
+        TextField(controller: moistureCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Moisture % (0-30)', hintText: '12.5')),
+        TextField(controller: remarksCtrl, decoration: const InputDecoration(labelText: 'Remarks (optional)')),
+        const SizedBox(height:8),
+        const Text('Demo grading — not official gov standard.', style: TextStyle(fontSize:11, color: Colors.black54)),
+      ]),
+      actions:[ TextButton(onPressed: ()=> Navigator.pop(c,false), child: const Text('Cancel')), FilledButton(onPressed: ()=> Navigator.pop(c,true), child: const Text('Save'))],
+    )));
+    if (ok!=true) return;
+    final moisture = double.tryParse(moistureCtrl.text);
+    if (moisture!=null && (moisture<0 || moisture>30)){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Moisture 0-30%'))); return; }
+    try{
+      await ref.read(apiClientProvider).post('/api/v1/procurements/$bookingId/quality', body:{'grade': grade, if(moisture!=null) 'moisture_percent': moisture, if(remarksCtrl.text.isNotEmpty) 'remarks': remarksCtrl.text});
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Quality grade $grade recorded')));
       setState((){});
     }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
   }
@@ -83,6 +131,8 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
                 Text('$farmer • $status', style: const TextStyle(fontSize:12, color: Colors.black54)),
                 Text('Qty: $qty quintal • $bookingId'.substring(0, ( 'Qty: $qty quintal • $bookingId').length.clamp(0,40)), style: const TextStyle(fontSize:11, color: Colors.black45)),
               ])),
+              IconButton(icon: const Icon(Icons.scale, size:18, color: Color(0xFF2E7D32)), tooltip: 'Weighment', onPressed: ()=> _recordWeighment(bookingId)),
+              IconButton(icon: const Icon(Icons.verified, size:18, color: Color(0xFF6A1B9A)), tooltip: 'Quality', onPressed: ()=> _recordQuality(bookingId)),
               PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(bookingId,s), itemBuilder: (_)=> QueueStatus.values.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), child: const Icon(Icons.more_vert)),
             ]));
           });

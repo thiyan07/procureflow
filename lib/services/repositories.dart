@@ -41,6 +41,7 @@ abstract class SlotRepository {
     required String commodity,
     required double quantity,
     required String slotId,
+    List<CommodityItem>? commodities, // multi-commodity optional
   });
   Future<List<Booking>> getBookingsForFarmer(String farmerId);
   Future<Booking?> getActiveBooking(String farmerId);

@@ -2,12 +2,18 @@ from pydantic import BaseModel
 from datetime import date, datetime
 from typing import Optional
 
+class CommodityItem(BaseModel):
+    commodity: str
+    quantity: float
+    unit: str = "quintal"
+
 class BookingCreate(BaseModel):
     centre_id: str
     slot_id: str
-    commodity: str
+    commodity: str  # legacy single — kept for backward compat
     estimated_quantity: float
     date: Optional[date] = None
+    commodities: Optional[list[CommodityItem]] = None  # multi-commodity preferred
 
 class BookingOut(BaseModel):
     id: str
@@ -27,5 +33,6 @@ class BookingOut(BaseModel):
     slot_end: Optional[str] = None
     queue_position: Optional[int] = None
     estimated_wait: Optional[int] = None
+    commodities: Optional[list[CommodityItem]] = None
     class Config:
         from_attributes = True

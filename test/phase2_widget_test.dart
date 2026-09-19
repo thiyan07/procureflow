@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:procureflow/features/auth/presentation/login_screen.dart';
 import 'package:procureflow/features/auth/presentation/register_screen.dart';
 import 'package:procureflow/features/auth/presentation/splash_screen.dart';
+import 'package:procureflow/services/mock/mock_repositories.dart';
+import 'package:procureflow/services/providers.dart';
 
 void main() {
   group('Phase 2 Widget Tests', () {
@@ -35,7 +37,12 @@ void main() {
 
     testWidgets('Login shows mobile and OTP flow', (tester) async {
       SharedPreferences.setMockInitialValues({});
-      await tester.pumpWidget(const ProviderScope(child: MaterialApp(home: LoginScreen())));
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+        ],
+        child: const MaterialApp(home: LoginScreen()),
+      ));
       expect(find.text('Welcome to ProcureFlow'), findsOneWidget);
       expect(find.text('Mobile number'), findsOneWidget);
       expect(find.text('Send OTP'), findsOneWidget);
@@ -44,9 +51,10 @@ void main() {
       await tester.tap(find.text('Send OTP'));
       await tester.pump();
       expect(find.textContaining('Mobile number is required'), findsOneWidget);
-      // enter valid and send
+      // enter valid and send — mock has 800ms delay
       await tester.enterText(find.byType(TextFormField).first, '9876543210');
       await tester.tap(find.text('Send OTP'));
+      await tester.pump(const Duration(milliseconds: 900));
       await tester.pumpAndSettle();
       expect(find.text('Enter OTP'), findsOneWidget);
       expect(find.text('Verify OTP'), findsOneWidget);

@@ -16,5 +16,6 @@ try:
     import app.models.queue  # noqa: F401
     import app.models.procurement  # noqa: F401
     import app.models.payment  # noqa: F401
+    import app.models.feedback  # noqa: F401
 except Exception:
     pass

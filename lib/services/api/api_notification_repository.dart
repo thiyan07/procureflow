@@ -9,7 +9,11 @@ class ApiNotificationRepository implements NotificationRepository {
 
   @override
   Future<List<AppNotification>> getNotifications(String farmerId) async {
-    final list = await _client.getList('/api/v1/notifications');
+    return getNotificationsPaginated(farmerId, limit: 50, offset: 0);
+  }
+
+  Future<List<AppNotification>> getNotificationsPaginated(String farmerId, {int limit=20, int offset=0}) async {
+    final list = await _client.getList('/api/v1/notifications', query: {'limit': limit, 'offset': offset});
     return list.map((e) {
       final m = e as Map<String, dynamic>;
       return AppNotification(

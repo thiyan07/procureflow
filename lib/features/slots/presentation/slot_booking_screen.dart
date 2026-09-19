@@ -8,6 +8,7 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../services/providers.dart';
 import '../../../models/slot.dart';
 import '../../../models/analytics.dart';
+import '../../../models/booking.dart';
 
 class SlotBookingScreen extends ConsumerStatefulWidget {
   const SlotBookingScreen({super.key});
@@ -15,9 +16,15 @@ class SlotBookingScreen extends ConsumerStatefulWidget {
   ConsumerState<SlotBookingScreen> createState() => _SlotBookingScreenState();
 }
 
+class _CommodityRowData {
+  String commodity;
+  final qtyCtrl = TextEditingController();
+  _CommodityRowData(this.commodity, String qty){ qtyCtrl.text = qty; }
+  void dispose()=> qtyCtrl.dispose();
+}
+
 class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
-  String _commodity = 'Paddy';
-  final _qtyCtrl = TextEditingController(text: '18.5');
+  final List<_CommodityRowData> _rows = [_CommodityRowData('Paddy','18.5')];
   String _centreId = 'c1';
   String _centreName = 'Bhavani Procurement Centre';
   DateTime _date = DateTime.now();
@@ -37,24 +44,45 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
   }
 
   @override
-  void dispose(){ _qtyCtrl.dispose(); super.dispose(); }
+  void dispose(){ for(final r in _rows) r.dispose(); super.dispose(); }
 
   Future<void> _confirm() async {
     if (_selectedSlotId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a slot')));
       return;
     }
-    final qty = double.tryParse(_qtyCtrl.text);
-    if (qty == null || qty <=0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter valid quantity')));
+    // Validate multi-commodity rows
+    final List<Map<String,dynamic>> commodities = [];
+    for(final row in _rows){
+      final q = double.tryParse(row.qtyCtrl.text);
+      if (q==null || q<=0){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter valid quantity for ${row.commodity}')));
+        return;
+      }
+      if (q>500){
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Quantity too high for ${row.commodity} (max 500)')));
+        return;
+      }
+      commodities.add({'commodity': row.commodity, 'quantity': q});
+    }
+    if (commodities.length > 5){
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Max 5 commodities per booking')));
       return;
     }
+    // For single, use legacy; for multi, send list
+    final primary = commodities.first;
+    final totalQty = commodities.fold(0.0, (a,e)=> a + (e['quantity'] as double));
     setState(()=> _booking=true);
     try{
       final auth = await ref.read(authRepositoryProvider).getCurrentUser();
       if (auth==null) throw Exception('Not logged in');
       final repo = ref.read(slotRepositoryProvider);
-      final booking = await repo.bookSlot(farmerId: auth.id, centreId: _centreId, commodity: _commodity, quantity: qty, slotId: _selectedSlotId!);
+      // Build CommodityItem list for API
+      List<CommodityItem>? commItems;
+      if (commodities.length > 1){
+        commItems = commodities.map((e)=> CommodityItem(commodity: e['commodity'] as String, quantity: e['quantity'] as double)).toList();
+      }
+      final booking = await repo.bookSlot(farmerId: auth.id, centreId: _centreId, commodity: primary['commodity'] as String, quantity: primary['quantity'] as double, slotId: _selectedSlotId!, commodities: commItems);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking successful! Token ${booking.tokenNumber}')));
       context.go('/token');
@@ -70,12 +98,26 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Book Slot')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        // Commodity
-        Text('Select commodity', style: Theme.of(context).textTheme.titleMedium),
+        // Multi-commodity
+        Row(children:[
+          Text('Commodities', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(width:8),
+          Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: const Text('Multi-commodity supported', style: TextStyle(fontSize:10, color: Color(0xFF2E7D32)))),
+        ]),
+        const SizedBox(height:4),
+        const Text('Example: Paddy 350 kg + Maize 150 kg in one token (max 5). Reuses same slot capacity.', style: TextStyle(fontSize:11, color: Colors.black54)),
         const SizedBox(height:8),
-        DropdownButtonFormField<String>(value: _commodity, decoration: const InputDecoration(labelText: 'Commodity'), items: AppConstants.commodities.map((c)=> DropdownMenuItem(value:c, child: Text(c))).toList(), onChanged: (v)=> setState(()=> _commodity=v!)),
-        const SizedBox(height:12),
-        TextFormField(controller: _qtyCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Estimated quantity (quintal)', hintText: '18.5')),
+        ..._rows.asMap().entries.map((entry){
+          final idx = entry.key;
+          final row = entry.value;
+          return Padding(padding: const EdgeInsets.only(bottom:8), child: Row(children:[
+            Expanded(flex: 3, child: DropdownButtonFormField<String>(value: row.commodity, decoration: InputDecoration(labelText: 'Commodity ${idx+1}'), items: AppConstants.commodities.map((c)=> DropdownMenuItem(value:c, child: Text(c, style: const TextStyle(fontSize:12)))).toList(), onChanged: (v)=> setState(()=> row.commodity=v!))),
+            const SizedBox(width:8),
+            Expanded(flex: 2, child: TextFormField(controller: row.qtyCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Qty (q)', hintText: '18.5'))),
+            if (_rows.length > 1) IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red), onPressed: ()=> setState(()=> _rows.removeAt(idx))),
+          ]));
+        }),
+        Align(alignment: Alignment.centerLeft, child: _rows.length < 3 ? TextButton.icon(icon: const Icon(Icons.add), label: const Text('Add commodity'), onPressed: ()=> setState(()=> _rows.add(_CommodityRowData('Maize','10')))) : const SizedBox()),
         const SizedBox(height:12),
         DropdownButtonFormField<String>(
           value: _centreId,

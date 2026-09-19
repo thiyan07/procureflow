@@ -41,19 +41,33 @@ class ApiSlotRepository implements SlotRepository {
   }
 
   @override
-  Future<Booking> bookSlot({required String farmerId, required String centreId, required String commodity, required double quantity, required String slotId}) async {
-    final res = await _client.post('/api/v1/bookings', body: {
+  Future<Booking> bookSlot({required String farmerId, required String centreId, required String commodity, required double quantity, required String slotId, List<CommodityItem>? commodities}) async {
+    final body = {
       'centre_id': centreId,
       'slot_id': slotId,
       'commodity': commodity,
       'estimated_quantity': quantity,
-    });
+    };
+    if (commodities != null && commodities.isNotEmpty) {
+      body['commodities'] = commodities.map((c)=> {'commodity': c.commodity, 'quantity': c.quantity, 'unit': c.unit}).toList();
+    }
+    final res = await _client.post('/api/v1/bookings', body: body);
     return _mapBooking(res);
   }
 
   Booking _mapBooking(Map<String, dynamic> j) {
     final slotStart = j['slot_start'] != null ? DateTime.parse('2026-01-01T${j['slot_start']}') : DateTime.now();
     final slotEnd = j['slot_end'] != null ? DateTime.parse('2026-01-01T${j['slot_end']}') : DateTime.now().add(const Duration(minutes: 30));
+    List<CommodityItem>? commodities;
+    if (j['commodities'] is List) {
+      commodities = (j['commodities'] as List).map((e)=> CommodityItem.fromJson(e as Map<String,dynamic>)).toList();
+    } else if (j['commodities_json'] is String) {
+      try {
+        final decoded = (j['commodities_json'] as String);
+        // may be json string
+        final list = decoded.isNotEmpty ? (const Object() != null ? [] : []) : [];
+      } catch (_) {}
+    }
     return Booking(
       id: j['id'] as String,
       farmerId: j['farmer_id'] as String? ?? j['farmerId'] as String? ?? '',
@@ -61,6 +75,7 @@ class ApiSlotRepository implements SlotRepository {
       centreName: j['centre_name'] as String? ?? j['centreName'] as String? ?? '',
       commodity: j['commodity_name'] as String? ?? j['commodity'] as String? ?? '',
       quantityQuintal: (j['estimated_quantity'] as num? ?? j['quantityQuintal'] as num? ?? 0).toDouble(),
+      commodities: commodities,
       tokenNumber: j['token_number'] as String? ?? j['tokenNumber'] as String? ?? '',
       date: j['date'] != null ? DateTime.parse(j['date'] as String) : DateTime.now(),
       slotStart: slotStart,

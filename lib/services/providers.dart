@@ -11,6 +11,7 @@ import 'api/api_queue_repository.dart';
 import 'api/api_procurement_repository.dart';
 import 'api/api_payment_repository.dart';
 import 'api/api_notification_repository.dart';
+import 'api/api_ai_repository.dart';
 
 // Shared ApiClient
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
@@ -25,7 +26,7 @@ final queueRepositoryProvider = Provider<QueueRepository>((ref) => _useMock ? Mo
 final procurementRepositoryProvider = Provider<ProcurementRepository>((ref) => _useMock ? MockProcurementRepository() : ApiProcurementRepository(ref.watch(apiClientProvider)));
 final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => _useMock ? MockPaymentRepository() : ApiPaymentRepository(ref.watch(apiClientProvider)));
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) => _useMock ? MockNotificationRepository() : ApiNotificationRepository(ref.watch(apiClientProvider)));
-final aiRepositoryProvider = Provider<AIRepository>((ref) => MockAIRepository());
+final aiRepositoryProvider = Provider<AIRepository>((ref) => _useMock ? MockAIRepository() : ApiAiRepository(ref.watch(apiClientProvider)));
 
 // Language provider
 final languageCodeProvider = StateProvider<String>((ref) => 'en');

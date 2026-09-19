@@ -84,6 +84,8 @@ class FarmerHomeScreen extends ConsumerWidget {
                 children: [
                   _ActionCard(icon: Icons.store, label: 'Book Slot', color: AppTheme.primaryGreen, onTap: () => context.push('/centres')),
                   _ActionCard(icon: Icons.confirmation_number, label: 'My Token', color: const Color(0xFF1565C0), onTap: () => context.push('/token')),
+                  _ActionCard(icon: Icons.event_note, label: 'Day Planner', color: const Color(0xFF00838F), onTap: () => context.push('/planner')),
+                  _ActionCard(icon: Icons.history, label: 'History', color: const Color(0xFF4E342E), onTap: () => context.push('/history')),
                   _ActionCard(icon: Icons.timeline, label: 'Procurement', color: const Color(0xFF6A1B9A), onTap: () => context.push('/procurement')),
                   _ActionCard(icon: Icons.payments_outlined, label: 'Payment', color: const Color(0xFFEF6C00), onTap: () => context.push('/payment')),
                 ],

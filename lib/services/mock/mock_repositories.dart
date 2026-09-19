@@ -152,6 +152,7 @@ class MockSlotRepository implements SlotRepository {
     required String commodity,
     required double quantity,
     required String slotId,
+    List<CommodityItem>? commodities,
   }) async {
     await Future.delayed(AppConstants.mockDelay);
     final centre = _db.centres.firstWhere((c) => c.id == centreId);
@@ -174,13 +175,18 @@ class MockSlotRepository implements SlotRepository {
     // generate token ordinal: max +1
     final maxOrdinal = _db.bookingOrdinal.values.isEmpty ? 27 : _db.bookingOrdinal.values.reduce((a, b) => a > b ? a : b);
     final newOrdinal = maxOrdinal + 1;
+    // handle multi-commodity
+    final effCommodities = commodities;
+    final effCommodity = effCommodities != null && effCommodities.isNotEmpty ? effCommodities.map((c)=>c.commodity).join(", ") : commodity;
+    final effQty = effCommodities != null && effCommodities.isNotEmpty ? effCommodities.fold(0.0, (a,c)=>a+c.quantity) : quantity;
     final booking = Booking(
       id: 'b_${DateTime.now().millisecondsSinceEpoch}',
       farmerId: farmerId,
       centreId: centreId,
       centreName: centre.name,
-      commodity: commodity,
-      quantityQuintal: quantity,
+      commodity: effCommodity,
+      quantityQuintal: effQty,
+      commodities: effCommodities,
       tokenNumber: '#$newOrdinal',
       date: slot.date,
       slotStart: slot.start,

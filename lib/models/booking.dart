@@ -1,5 +1,14 @@
 import '../core/constants/app_constants.dart';
 
+class CommodityItem {
+  final String commodity;
+  final double quantity;
+  final String unit;
+  const CommodityItem({required this.commodity, required this.quantity, this.unit='quintal'});
+  Map<String,dynamic> toJson()=> {'commodity':commodity,'quantity':quantity,'unit':unit};
+  factory CommodityItem.fromJson(Map<String,dynamic> j)=> CommodityItem(commodity: j['commodity'] as String, quantity: (j['quantity'] as num).toDouble(), unit: j['unit'] as String? ?? 'quintal');
+}
+
 class Booking {
   final String id;
   final String farmerId;
@@ -7,6 +16,7 @@ class Booking {
   final String centreName;
   final String commodity;
   final double quantityQuintal;
+  final List<CommodityItem>? commodities; // multi-commodity support, null = legacy single
   final String tokenNumber; // e.g. #27
   final DateTime date;
   final DateTime slotStart;
@@ -23,6 +33,7 @@ class Booking {
     required this.centreName,
     required this.commodity,
     required this.quantityQuintal,
+    this.commodities,
     required this.tokenNumber,
     required this.date,
     required this.slotStart,
@@ -33,6 +44,14 @@ class Booking {
     this.completedAt,
   });
 
+  // Helper: display commodities as string e.g. "Paddy 350kg, Maize 150kg"
+  String get commoditiesDisplay {
+    if (commodities != null && commodities!.isNotEmpty) {
+      return commodities!.map((c)=> '${c.commodity} ${c.quantity} ${c.unit}').join(', ');
+    }
+    return '$commodity ${quantityQuintal} quintal';
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'farmerId': farmerId,
@@ -40,6 +59,7 @@ class Booking {
         'centreName': centreName,
         'commodity': commodity,
         'quantityQuintal': quantityQuintal,
+        'commodities': commodities?.map((c)=>c.toJson()).toList(),
         'tokenNumber': tokenNumber,
         'date': date.toIso8601String(),
         'slotStart': slotStart.toIso8601String(),
@@ -57,6 +77,7 @@ class Booking {
         centreName: j['centreName'] as String,
         commodity: j['commodity'] as String,
         quantityQuintal: (j['quantityQuintal'] as num).toDouble(),
+        commodities: (j['commodities'] as List?)?.map((e)=> CommodityItem.fromJson(e as Map<String,dynamic>)).toList(),
         tokenNumber: j['tokenNumber'] as String,
         date: DateTime.parse(j['date'] as String),
         slotStart: DateTime.parse(j['slotStart'] as String),
