@@ -82,7 +82,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
                   borderData: FlBorderData(show:false),
                 ))),
                 const SizedBox(height:6),
-                Text(peak != null ? 'Peak ${peak.slotLabel} • ${peak.expectedFarmers} expected • Lower load = recommended' : 'No peak — lower load = recommended', style: const TextStyle(fontSize:11, color: Colors.black54)),
+                Text(peak != null ? 'Peak ${peak.slotLabel} • ${peak.expectedFarmers} expected • Lower load = recommended' : 'No peak — lower load = recommended', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ]);
             },
           )),
@@ -99,7 +99,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
               const SizedBox(height:8),
               LinearProgressIndicator(value: occ, minHeight:8, color: occ>0.85? Colors.red: occ>0.7? const Color(0xFFEF6C00): const Color(0xFF2E7D32)),
               const SizedBox(height:4),
-              Text('${(occ*100).toInt()}% today • ${cap['remaining_capacity']} slots remaining • Queue ${cap['current_queue']} • Counters ${cap['active_counters']}', style: const TextStyle(fontSize:11, color: Colors.black54)),
+              Text('${(occ*100).toInt()}% today • ${cap['remaining_capacity']} slots remaining • Queue ${cap['current_queue']} • Counters ${cap['active_counters']}', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               if (warn.isNotEmpty) ...[
                 const SizedBox(height:6),
                 ...warn.map((w)=> Padding(padding: const EdgeInsets.symmetric(vertical:2), child: Row(children:[const Icon(Icons.warning, size:12, color: Color(0xFFEF6C00)), const SizedBox(width:4), Expanded(child: Text(w.toString(), style: const TextStyle(fontSize:11, color: Color(0xFFBF360C))))]))),
@@ -124,12 +124,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
                   const SizedBox(width:6),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                     Text(m['message']?.toString()??'', style: TextStyle(fontSize:12, fontWeight: FontWeight.w600, color: col)),
-                    Text(m['action']?.toString()??'', style: const TextStyle(fontSize:11, color: Colors.black54)),
+                    Text(m['action']?.toString()??'', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ])),
                 ]));
               }),
               const SizedBox(height:4),
-              Text('Not ML — deterministic thresholds queue>15, wait>30, capacity>80%, counters<2', style: const TextStyle(fontSize:10, color: Colors.black45)),
+              Text('Not ML — deterministic thresholds queue>15, wait>30, capacity>80%, counters<2', style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ]));
           },
         ),
@@ -142,7 +142,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
             return AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               const Text('Demand Forecast (per centre, 7 days)', style: TextStyle(fontWeight: FontWeight.w700, fontSize:13)),
               const SizedBox(height:4),
-              const Text('Baseline fallback clearly marked if insufficient history', style: TextStyle(fontSize:11, color: Colors.black54)),
+              Text('Baseline fallback clearly marked if insufficient history', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height:8),
               ...forecast.take(5).map((e){
                 final m=e as Map; final conf=m['confidence'] as String? ?? 'low';
@@ -150,11 +150,11 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
                   SizedBox(width:90, child: Text(m['date']?.toString()??'', style: const TextStyle(fontSize:11))),
                   Expanded(child: LinearProgressIndicator(value: ((m['predicted_bookings'] as int? ?? 18)/30).clamp(0,1), minHeight:6, color: conf=='low'? Colors.grey: const Color(0xFF2E7D32))),
                   const SizedBox(width:6),
-                  Text('${m['predicted_bookings']} ${conf=='low'? '(fallback)':''}', style: TextStyle(fontSize:11, color: conf=='low'? Colors.grey: Colors.black87)),
+                  Text('${m['predicted_bookings']} ${conf=='low'? '(fallback)':''}', style: TextStyle(fontSize:11, color: conf=='low'? Colors.grey: Theme.of(context).colorScheme.onSurface)),
                 ]));
               }),
               const SizedBox(height:4),
-              Text('Model: ${data['model_info']??''}', style: const TextStyle(fontSize:10, color: Colors.black45)),
+              Text('Model: ${data['model_info']??''}', style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ]));
           },
         ),
@@ -175,12 +175,12 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
                   const SizedBox(width:6),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                     Text(m['message']?.toString()??'', style: TextStyle(fontSize:12, color: col)),
-                    Text(m['reason']?.toString()??'', style: const TextStyle(fontSize:11, color: Colors.black54)),
+                    Text(m['reason']?.toString()??'', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ])),
                 ]));
               }),
               const SizedBox(height:4),
-              const Text('No heavy ML — rule-based queue/spike/capacity/delay', style: TextStyle(fontSize:10, color: Colors.black45)),
+              Text('No heavy ML — rule-based queue/spike/capacity/delay', style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ]));
           },
         ),
@@ -196,7 +196,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>{
           }catch(e){ if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
         }),
         const SizedBox(height:6),
-        const Text('Reports: Daily centre / Procurement summary / Queue / Payment / Commodity via CSV. No complex BI.', style: TextStyle(fontSize:11, color: Colors.black45)),
+        Text('Reports: Daily centre / Procurement summary / Queue / Payment / Commodity via CSV. No complex BI.', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ]),
     );
   }
@@ -208,7 +208,7 @@ class _Kpi extends StatelessWidget{
   Widget build(BuildContext context)=> AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
     Icon(icon, color: const Color(0xFF2E7D32), size:20),
     const SizedBox(height:6),
-    Text(title, style: const TextStyle(fontSize:11, color: Colors.black54)),
+    Text(title, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     Text(value, style: const TextStyle(fontSize:20, fontWeight: FontWeight.w800)),
   ]));
 }

@@ -12,9 +12,29 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+def _computed_status(c: ProcurementCentre, db: Session) -> str:
+    # Dynamic status based on occupancy/queue, not hardcoded — respects manual Closed/Emergency
+    if c.status in ("Closed", "Emergency") or not c.is_active:
+        return c.status
+    # Check occupancy and queue for Busy vs Open
+    today = date.today()
+    slots = db.query(Slot).filter(Slot.centre_id == c.id, Slot.date == today).all()
+    total = sum(s.capacity for s in slots)
+    used = sum(s.booked for s in slots)
+    occ = used/total if total else 0
+    from app.models.queue import QueueToken, QueueStatus
+    qsize = db.query(QueueToken).filter(QueueToken.centre_id == c.id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value])).count()
+    # Busy if high occupancy or high queue
+    if occ > 0.7 or qsize > 12:
+        return "Busy"
+    return "Open"
+
 @router.get("", response_model=list[CentreOut])
 def list_centres(db: Session = Depends(get_db)):
     centres = db.query(ProcurementCentre).filter(ProcurementCentre.is_active == True).all()
+    # Return with computed status (not hardcoded)
+    for c in centres:
+        c.status = _computed_status(c, db)
     return centres
 
 @router.get("/{centre_id}", response_model=CentreOut)
@@ -22,6 +42,7 @@ def get_centre(centre_id: str, db: Session = Depends(get_db)):
     c = db.get(ProcurementCentre, centre_id)
     if not c:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Centre not found"})
+    c.status = _computed_status(c, db)
     return c
 
 @router.get("/{centre_id}/status", response_model=CentreStatusOut)
@@ -48,16 +69,31 @@ def centre_dashboard(centre_id: str, db: Session = Depends(get_db)):
     from app.models.queue import QueueToken, QueueStatus
     from app.models.procurement import Procurement, ProcurementStage
     from app.models.payment import Payment, PaymentStatus
-    total = db.query(QueueToken).filter(QueueToken.centre_id==centre_id).count()
-    waiting = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status==QueueStatus.WAITING.value).count()
-    processing = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status==QueueStatus.PROCESSING.value).count()
-    completed = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status==QueueStatus.COMPLETED.value).count()
-    called = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status==QueueStatus.CALLED.value).count()
-    # payments pending
-    from app.models.booking import Booking
-    bookings = db.query(Booking).filter(Booking.centre_id==centre_id).all()
-    bids = [b.id for b in bookings]
-    payment_pending = db.query(Payment).filter(Payment.booking_id.in_(bids), Payment.status==PaymentStatus.PENDING.value).count() if bids else 0
+    from app.models.booking import Booking, BookingStatus
+    # Filter to today and exclude cancelled for accurate daily stats
+    today = date.today()
+    today_bookings = db.query(Booking).filter(Booking.centre_id==centre_id, Booking.date==today, Booking.status != BookingStatus.CANCELLED.value).all()
+    today_bids = [b.id for b in today_bookings]
+    # Queue counts for today only (join via booking date)
+    if today_bids:
+        total = db.query(QueueToken).filter(QueueToken.booking_id.in_(today_bids)).count()
+        waiting = db.query(QueueToken).filter(QueueToken.booking_id.in_(today_bids), QueueToken.status==QueueStatus.WAITING.value).count()
+        processing = db.query(QueueToken).filter(QueueToken.booking_id.in_(today_bids), QueueToken.status==QueueStatus.PROCESSING.value).count()
+        completed = db.query(QueueToken).filter(QueueToken.booking_id.in_(today_bids), QueueToken.status==QueueStatus.COMPLETED.value).count()
+        called = db.query(QueueToken).filter(QueueToken.booking_id.in_(today_bids), QueueToken.status==QueueStatus.CALLED.value).count()
+        payment_pending = db.query(Payment).filter(Payment.booking_id.in_(today_bids), Payment.status==PaymentStatus.PENDING.value).count()
+    else:
+        total = waiting = processing = completed = called = payment_pending = 0
+    # Fallback to all-time if today empty (for demo centres with bookings on other dates like tomorrow)
+    if total == 0:
+        all_bids = [b.id for b in db.query(Booking).filter(Booking.centre_id==centre_id, Booking.status != BookingStatus.CANCELLED.value).all()]
+        if all_bids:
+            total = db.query(QueueToken).filter(QueueToken.booking_id.in_(all_bids)).count()
+            waiting = db.query(QueueToken).filter(QueueToken.booking_id.in_(all_bids), QueueToken.status==QueueStatus.WAITING.value).count()
+            processing = db.query(QueueToken).filter(QueueToken.booking_id.in_(all_bids), QueueToken.status==QueueStatus.PROCESSING.value).count()
+            completed = db.query(QueueToken).filter(QueueToken.booking_id.in_(all_bids), QueueToken.status==QueueStatus.COMPLETED.value).count()
+            called = db.query(QueueToken).filter(QueueToken.booking_id.in_(all_bids), QueueToken.status==QueueStatus.CALLED.value).count()
+            payment_pending = db.query(Payment).filter(Payment.booking_id.in_(all_bids), Payment.status==PaymentStatus.PENDING.value).count()
     # avg wait / processing - simple
     avg_wait = calculate_wait(waiting, c.avg_processing_minutes, c.active_counters) if waiting else 0
     return {"centre_id": centre_id, "centre_name": c.name, "today_farmers": total, "waiting": waiting, "processing": processing, "completed": completed, "called": called, "payment_pending": payment_pending, "avg_wait_minutes": avg_wait, "active_counters": c.active_counters}

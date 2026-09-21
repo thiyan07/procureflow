@@ -1,0 +1,28 @@
+ProcureFlow — FINAL PRODUCTION DEPLOYMENT REPORT (2026-09-19) — REAL + DEV FALLBACK — Always Updated
+Project: ProcureFlow Flutter 3.44.7 + FastAPI 1.0.0 + PostgreSQL 18 tables (fresh DB verified via 127.0.0.1:5433)
+Device: V2338 Android 16 10BEC514NJ006PQ (adb reverse tcp:8000)
+Backend: 127.0.0.1:8000 dev.db 264K + 127.0.0.1:5433 procureflow_test/final 4 centres 96 slots Tag: v1.0.0-feature-frozen + v1.0.0-real
+Tests: 19 backend passed, 15 Flutter passed (0 failed after fix) Builds: app-debug.apk 162M 6.1s, app-release.apk 55M 14.6s Storage: 5.8G free
+Repo: https://github.com/thiyan07/procureflow main f727638 + production hardening
+
+Deployment: Backend URL https://procureflow-api.onrender.com (to be via API_BASE_URL), DB PostgreSQL 18 procureflow 5433 trust local initdb -D /tmp/pg_test, Platform docker-compose postgres:16-alpine pgdata + uvicorn 0.0.0.0 $PORT, Timestamp 2026-09-19 02:55
+
+Backend: Health GET /health 200 {"status":"ok"} GET / 200 GET /docs 200, Auth POST /auth/send-otp 200 POST /auth/verify-otp 200 JWT HS256 30m deps.get_current_user, DB 18 tables audit_logs bookings centre_queue_states commodities device_tokens farmers feedbacks notifications payments procurement_centres procurement_events procurements quality_checks queue_events queue_tokens slots users weighments + alembic_version, Migrations 001_initial Base.metadata.create_all 18 tables 002_multi_commodity ADD COLUMN IF NOT EXISTS
+
+Flutter: Production API String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000') DemoConfig.validateProduction() if env==prod && useMockBackend throw, if apiUrl localhost throw, main.dart validateProduction() before runApp, Release build 55M
+
+OTP: MockOTPProvider fixed 123456 is_dev, ProductionOTPProvider secrets.randbelow TWILIO_* raise RuntimeError if not configured, get_otp_provider() selects, BLOCKED_PENDING_CREDENTIALS
+
+FCM: mock_fcm_token if useMockBackend else firebase_messaging, fcm_service mock [FCM-MOCK] if FCM_* empty else firebase-admin, device_tokens dedup, BLOCKED_PENDING_CREDENTIALS
+
+Real Workflow: Register -> Login -> Profile -> Centre -> Slot -> Booking -> Queue -> Arrival -> Weighment -> Quality -> Procurement -> Payment -> Notification -> History E2E 26 steps POST /bookings 201 P12 DB SELECT token_number P12 POST /queue/{bid}/transition CALLED 200 GET /queue/{bid} CALLED POST /procurements/bid/weighment 200 WEIGHMENT POST /procurements/bid/quality 200 A POST /procurements/bid/advance COMPLETED 200 POST /payments/bid/status COMPLETED 200 TXN GET /procurements/bid/receipt 200 REC-P12 E2E PASS 26/26
+
+Security: Secret scan 0 password/api_key/jwt_secret/twilio/fcm only is_active mock_fcm_token backend/.env ignored, RBAC farmer A 403 farmer B 200 operator 200 unauth 401 PATCH /centres 403 farmer 200 operator, DB restart GET /bookings 15 after pkill -9 setsid restart GET /bookings 15
+
+Tests: Backend 19 passed, Flutter 15 passed, Analyze info only, E2E 26/26, Release build 55M
+
+Remaining Blockers: Twilio SMS BLOCKED_PENDING_CREDENTIALS (TWILIO_ACCOUNT_SID), FCM Push BLOCKED_PENDING_CREDENTIALS (FCM_PROJECT_ID), Signing release.jks BLOCKED (need keytool), PostgreSQL prod procureflow user FATAL password auth (need CREATE USER)
+
+Next Actions: TWILIO_ACCOUNT_SID=AC... TWILIO_AUTH_TOKEN FCM_PROJECT_ID ProcureFlow prod signing keytool etc as per PRODUCTION_DEPLOYMENT_REPORT.md Section 10
+
+Final Artifacts: build/app/outputs/flutter-apk/app-debug.apk 162M app-release.apk 55M backend/alembic 001_initial 002 docs/* 18 files

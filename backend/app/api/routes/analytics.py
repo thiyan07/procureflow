@@ -21,13 +21,16 @@ def farmer_analytics(farmer_id: str, db: Session = Depends(get_db)):
     return {"farmer_id": farmer_id, "total_bookings": total, "completed_procurements": completed, "payments": [{"commodity": p.commodity, "amount": p.total_amount, "status": p.status} for p in payments], "total_amount_received": total_amount}
 
 @router.get("/operator/{centre_id}")
-def operator_analytics(centre_id: str, days: int = Query(7, ge=1, le=30), db: Session = Depends(get_db)):
-    # daily bookings last N days
+def operator_analytics(centre_id: str, days: int = Query(7, ge=1, le=30), commodity: str | None = Query(None), db: Session = Depends(get_db)):
+    # daily bookings last N days, filtered by commodity if provided (real DB query)
     today = date.today()
     daily = []
     for i in range(days):
         d = today - timedelta(days=i)
-        cnt = db.query(Booking).filter(Booking.centre_id == centre_id, Booking.date == d).count()
+        q = db.query(Booking).filter(Booking.centre_id == centre_id, Booking.date == d)
+        if commodity:
+            q = q.filter((Booking.commodity_name.contains(commodity)) | (Booking.commodities_json.contains(commodity) if hasattr(Booking, 'commodities_json') else False))
+        cnt = q.count()
         completed = db.query(QueueToken).filter(QueueToken.centre_id == centre_id, QueueToken.status == QueueStatus.COMPLETED.value).count()  # simplified
         daily.append({"date": d.isoformat(), "bookings": cnt})
     daily.reverse()
@@ -44,19 +47,31 @@ def operator_analytics(centre_id: str, days: int = Query(7, ge=1, le=30), db: Se
     return {"centre_id": centre_id, "daily_bookings": daily, "waiting": waiting, "processing": processing, "noshow": noshow, "avg_wait": avg_wait, "centre": c.name if c else centre_id}
 
 @router.get("/management")
-def management_analytics(db: Session = Depends(get_db)):
-    centres = db.query(ProcurementCentre).all()
+def management_analytics(centre_id: str | None = Query(None), commodity: str | None = Query(None), db: Session = Depends(get_db)):
+    # filtered by centre and commodity if provided — real DB query
+    q_centres = db.query(ProcurementCentre)
+    if centre_id:
+        q_centres = q_centres.filter(ProcurementCentre.id == centre_id)
+    centres = q_centres.all()
     out = []
     for c in centres:
-        total = db.query(Booking).filter(Booking.centre_id == c.id).count()
+        q = db.query(Booking).filter(Booking.centre_id == c.id)
+        if commodity:
+            q = q.filter((Booking.commodity_name.contains(commodity)) | (Booking.commodities_json.contains(commodity) if hasattr(Booking, 'commodities_json') else False))
+        total = q.count()
         completed = db.query(QueueToken).filter(QueueToken.centre_id == c.id, QueueToken.status == QueueStatus.COMPLETED.value).count()
         out.append({"centre_id": c.id, "centre_name": c.name, "total_bookings": total, "completed": completed, "active_counters": c.active_counters, "avg_processing": c.avg_processing_minutes})
-    # demand trends: bookings per day last 7 days all centres
+    # demand trends: bookings per day last 7 days filtered by centre/commodity if provided
     today = date.today()
     trend = []
     for i in range(7):
         d = today - timedelta(days=i)
-        cnt = db.query(Booking).filter(Booking.date == d).count()
+        q = db.query(Booking).filter(Booking.date == d)
+        if centre_id:
+            q = q.filter(Booking.centre_id == centre_id)
+        if commodity:
+            q = q.filter((Booking.commodity_name.contains(commodity)) | (Booking.commodities_json.contains(commodity) if hasattr(Booking, 'commodities_json') else False))
+        cnt = q.count()
         trend.append({"date": d.isoformat(), "bookings": cnt})
     trend.reverse()
     # peak periods: slots with most bookings today

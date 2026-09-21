@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/storage/local_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../core/network/api_error.dart';
 import '../../../services/providers.dart';
 import '../../../models/slot.dart';
 import '../../../models/analytics.dart';
 import '../../../models/booking.dart';
+import '../../../l10n/app_localizations.dart';
 
 class SlotBookingScreen extends ConsumerStatefulWidget {
   const SlotBookingScreen({super.key});
@@ -87,22 +91,35 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking successful! Token ${booking.tokenNumber}')));
       context.go('/token');
     } catch(e){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      final friendly = userFriendlyMessage(e);
+      // Special handling for duplicate booking: navigate to token
+      if (e.toString().contains('DUPLICATE_BOOKING')) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(friendly),
+          action: SnackBarAction(label: 'View Token', onPressed: () => context.go('/token')),
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendly)));
+      }
     } finally{ if(mounted) setState(()=> _booking=false); }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final slotsAsync = ref.watch(_slotsProvider((_centreId, _date)));
     final centresAsync = ref.watch(_centresForDropdown);
+    final commoditiesAsync = ref.watch(_commoditiesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Book Slot')),
+      appBar: AppBar(title: Text(loc.bookSlot)),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         // Multi-commodity
         Row(children:[
-          Text('Commodities', style: Theme.of(context).textTheme.titleMedium),
+          Text(loc.selectCommodity, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(width:8),
-          Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: const Text('Multi-commodity supported', style: TextStyle(fontSize:10, color: Color(0xFF2E7D32)))),
+          Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: Text(loc.multiCommoditySupported, style: const TextStyle(fontSize:10, color: Color(0xFF2E7D32)))),
         ]),
         const SizedBox(height:4),
         const Text('Example: Paddy 350 kg + Maize 150 kg in one token (max 5). Reuses same slot capacity.', style: TextStyle(fontSize:11, color: Colors.black54)),
@@ -110,14 +127,15 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
         ..._rows.asMap().entries.map((entry){
           final idx = entry.key;
           final row = entry.value;
+          final commodities = commoditiesAsync.maybeWhen(data: (list)=> list, orElse: ()=> AppConstants.commodities);
           return Padding(padding: const EdgeInsets.only(bottom:8), child: Row(children:[
-            Expanded(flex: 3, child: DropdownButtonFormField<String>(value: row.commodity, decoration: InputDecoration(labelText: 'Commodity ${idx+1}'), items: AppConstants.commodities.map((c)=> DropdownMenuItem(value:c, child: Text(c, style: const TextStyle(fontSize:12)))).toList(), onChanged: (v)=> setState(()=> row.commodity=v!))),
+            Expanded(flex: 3, child: DropdownButtonFormField<String>(value: commodities.contains(row.commodity) ? row.commodity : commodities.first, decoration: InputDecoration(labelText: 'Commodity ${idx+1}'), items: commodities.map((c)=> DropdownMenuItem(value:c, child: Text(c, style: const TextStyle(fontSize:12)))).toList(), onChanged: (v)=> setState(()=> row.commodity=v!))),
             const SizedBox(width:8),
             Expanded(flex: 2, child: TextFormField(controller: row.qtyCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Qty (q)', hintText: '18.5'))),
             if (_rows.length > 1) IconButton(icon: const Icon(Icons.remove_circle_outline, color: Colors.red), onPressed: ()=> setState(()=> _rows.removeAt(idx))),
           ]));
         }),
-        Align(alignment: Alignment.centerLeft, child: _rows.length < 3 ? TextButton.icon(icon: const Icon(Icons.add), label: const Text('Add commodity'), onPressed: ()=> setState(()=> _rows.add(_CommodityRowData('Maize','10')))) : const SizedBox()),
+        Align(alignment: Alignment.centerLeft, child: _rows.length < 3 ? TextButton.icon(icon: const Icon(Icons.add), label: Text(loc.addCommodity), onPressed: ()=> setState(()=> _rows.add(_CommodityRowData('Maize','10')))) : const SizedBox()),
         const SizedBox(height:12),
         DropdownButtonFormField<String>(
           value: _centreId,
@@ -185,6 +203,15 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
 }
 
 final _centresForDropdown = FutureProvider((ref) async => ref.watch(centreRepositoryProvider).getCentres());
+final _commoditiesProvider = FutureProvider<List<String>>((ref) async {
+  try {
+    final client = ref.watch(apiClientProvider);
+    final list = await client.getList('/api/v1/commodities');
+    final names = list.map((e) => (e as Map)['name'] as String).toList();
+    if (names.isNotEmpty) return names;
+  } catch (_) {}
+  return AppConstants.commodities;
+});
 final _slotsProvider = FutureProvider.family<List<Slot>, (String, DateTime)>((ref, arg) async {
   final (cid, date) = arg;
   return ref.watch(slotRepositoryProvider).getSlots(cid, date);

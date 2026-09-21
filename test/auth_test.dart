@@ -44,6 +44,8 @@ void main() {
       final user = await repo.registerFarmer(
         fullName: 'Test Farmer',
         mobile: '9999999999',
+        password: 'test123',
+        email: 'testfarmer@procureflow.in',
         farmerId: 'FARM-TEST-001',
         village: 'TestVillage',
         district: 'Erode',

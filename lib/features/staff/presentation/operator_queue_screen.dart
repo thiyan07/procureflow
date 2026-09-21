@@ -45,7 +45,7 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
         TextField(controller: ctrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Net weight (quintal)', hintText: '18.5')),
         TextField(controller: grossCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Gross weight (optional)')),
         const SizedBox(height:8),
-        const Text('Valid 0-500 quintal. Gross >= net. Demo only.', style: TextStyle(fontSize:11, color: Colors.black54)),
+        Text('Valid 0-500 quintal. Gross ≥ net.', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ]),
       actions:[ TextButton(onPressed: ()=> Navigator.pop(c,false), child: const Text('Cancel')), FilledButton(onPressed: ()=> Navigator.pop(c,true), child: const Text('Save'))],
     ));
@@ -70,7 +70,7 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
         TextField(controller: moistureCtrl, keyboardType: const TextInputType.numberWithOptions(decimal:true), decoration: const InputDecoration(labelText: 'Moisture % (0-30)', hintText: '12.5')),
         TextField(controller: remarksCtrl, decoration: const InputDecoration(labelText: 'Remarks (optional)')),
         const SizedBox(height:8),
-        const Text('Demo grading — not official gov standard.', style: TextStyle(fontSize:11, color: Colors.black54)),
+        Text('Grading per FAQ. Moisture 0–30%.', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ]),
       actions:[ TextButton(onPressed: ()=> Navigator.pop(c,false), child: const Text('Cancel')), FilledButton(onPressed: ()=> Navigator.pop(c,true), child: const Text('Save'))],
     )));
@@ -96,8 +96,8 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
             const SizedBox(width:12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               Text('${b.tokenNumber} • ${b.commodity}', style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text('${b.centreName} • ${b.queueStatus.name}', style: const TextStyle(fontSize:12, color: Colors.black54)),
-              Text('Qty: ${b.quantityQuintal} quintal', style: const TextStyle(fontSize:11, color: Colors.black45)),
+              Text('${b.centreName} • ${b.queueStatus.name}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('Qty: ${b.quantityQuintal} quintal', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
             PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(b.id,s), itemBuilder: (_)=> QueueStatus.values.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), child: const Icon(Icons.more_vert)),
           ]));
@@ -128,8 +128,8 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
               const SizedBox(width:12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                 Text('$token • $commodity', style: const TextStyle(fontWeight: FontWeight.w700)),
-                Text('$farmer • $status', style: const TextStyle(fontSize:12, color: Colors.black54)),
-                Text('Qty: $qty quintal • $bookingId'.substring(0, ( 'Qty: $qty quintal • $bookingId').length.clamp(0,40)), style: const TextStyle(fontSize:11, color: Colors.black45)),
+                Text('$farmer • $status', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                Text('Qty: $qty quintal • $bookingId'.substring(0, ( 'Qty: $qty quintal • $bookingId').length.clamp(0,40)), style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ])),
               IconButton(icon: const Icon(Icons.scale, size:18, color: Color(0xFF2E7D32)), tooltip: 'Weighment', onPressed: ()=> _recordWeighment(bookingId)),
               IconButton(icon: const Icon(Icons.verified, size:18, color: Color(0xFF6A1B9A)), tooltip: 'Quality', onPressed: ()=> _recordQuality(bookingId)),

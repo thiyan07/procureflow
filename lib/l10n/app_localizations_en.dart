@@ -303,4 +303,104 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get paymentPending => 'Payment Pending';
+
+  @override
+  String get addCommodity => 'Add commodity';
+
+  @override
+  String get removeCommodity => 'Remove';
+
+  @override
+  String get multiCommoditySupported => 'Multi-commodity supported';
+
+  @override
+  String get weighment => 'Weighment';
+
+  @override
+  String get qualityCheck => 'Quality Check';
+
+  @override
+  String get receipt => 'Receipt';
+
+  @override
+  String get digitalReceipt => 'Digital Receipt';
+
+  @override
+  String get capacityWarnings => 'Capacity warnings';
+
+  @override
+  String get queueMessages => 'Queue messages';
+
+  @override
+  String get bookingMessages => 'Booking messages';
+
+  @override
+  String get procurementStatus => 'Procurement status';
+
+  @override
+  String get centreCapacity => 'Centre Capacity';
+
+  @override
+  String get congestionAlerts => 'Congestion Alerts';
+
+  @override
+  String get demandForecast => 'Demand Forecast';
+
+  @override
+  String get anomalyDetection => 'Anomaly Detection';
+
+  @override
+  String get myProcurementDay => 'My Procurement Day';
+
+  @override
+  String get requiredDocuments => 'Required Documents';
+
+  @override
+  String get farmerIdLabel => 'Farmer ID';
+
+  @override
+  String get aadhaarLabel => 'Aadhaar';
+
+  @override
+  String get bankPassbookLabel => 'Bank passbook';
+
+  @override
+  String get landDocumentLabel => 'Land document';
+
+  @override
+  String get paddySampleLabel => 'Paddy sample';
+
+  @override
+  String get nextAction => 'Next action';
+
+  @override
+  String get reminderOn => 'Reminder ON';
+
+  @override
+  String get reminderOff => 'Reminder OFF';
+
+  @override
+  String get showToken => 'Show Token';
+
+  @override
+  String get viewReceipt => 'View Receipt';
+
+  @override
+  String get centreDocuments => 'Centre Documents';
+
+  @override
+  String get centreStatus => 'Centre Status';
+
+  @override
+  String get activeCounters => 'Active counters';
+
+  @override
+  String get slotCapacity => 'Slot capacity';
+
+  @override
+  String get closureReason => 'Closure reason';
+
+  @override
+  String get queueCorrectionNote =>
+      'Queue position calculated from database, PROCESSING not counted as ahead';
 }

@@ -81,8 +81,8 @@ def dev_queue_status(centre_id: str, db: Session = Depends(get_db), user: User =
 
 @router.get("/centre/{centre_id}")
 def list_centre_queue(centre_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Operator or any authenticated can view centre queue
-    tokens = db.query(QueueToken).filter(QueueToken.centre_id==centre_id).order_by(QueueToken.position).all()
+    # Operator or any authenticated can view centre queue — exclude cancelled/completed/no_show to keep queue clean
+    tokens = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status.notin_([QueueStatus.CANCELLED.value, QueueStatus.NO_SHOW.value, QueueStatus.COMPLETED.value])).order_by(QueueToken.position).all()
     # Join booking info
     out=[]
     for t in tokens:
@@ -111,8 +111,8 @@ def get_queue_status(booking_id: str, db: Session = Depends(get_db), user: User 
     qt = _get_token_for_booking(db, booking_id, user)
     booking = db.get(Booking, booking_id)
     centre = db.get(ProcurementCentre, qt.centre_id)
-    # farmers ahead: tokens with smaller position and waiting/called
-    ahead = db.query(QueueToken).filter(QueueToken.centre_id == qt.centre_id, QueueToken.position < qt.position, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value, QueueStatus.PROCESSING.value])).count()
+    # farmers ahead: tokens with smaller position and still waiting (WAITING/CALLED/ARRIVED) — PROCESSING is at counter, not ahead
+    ahead = db.query(QueueToken).filter(QueueToken.centre_id == qt.centre_id, QueueToken.position < qt.position, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value])).count()
     est = estimate_wait(ahead, centre.avg_processing_minutes if centre else 3, centre.active_counters if centre and centre.active_counters else 3)
     # Turn approaching intelligence: threshold farmersAhead <=2 triggers notification once
     if 0 < ahead <= 2 and qt.status == QueueStatus.WAITING.value:

@@ -657,6 +657,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Payment Pending'**
   String get paymentPending;
+
+  /// No description provided for @addCommodity.
+  ///
+  /// In en, this message translates to:
+  /// **'Add commodity'**
+  String get addCommodity;
+
+  /// No description provided for @removeCommodity.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeCommodity;
+
+  /// No description provided for @multiCommoditySupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Multi-commodity supported'**
+  String get multiCommoditySupported;
+
+  /// No description provided for @weighment.
+  ///
+  /// In en, this message translates to:
+  /// **'Weighment'**
+  String get weighment;
+
+  /// No description provided for @qualityCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality Check'**
+  String get qualityCheck;
+
+  /// No description provided for @receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get receipt;
+
+  /// No description provided for @digitalReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Digital Receipt'**
+  String get digitalReceipt;
+
+  /// No description provided for @capacityWarnings.
+  ///
+  /// In en, this message translates to:
+  /// **'Capacity warnings'**
+  String get capacityWarnings;
+
+  /// No description provided for @queueMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue messages'**
+  String get queueMessages;
+
+  /// No description provided for @bookingMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Booking messages'**
+  String get bookingMessages;
+
+  /// No description provided for @procurementStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Procurement status'**
+  String get procurementStatus;
+
+  /// No description provided for @centreCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Centre Capacity'**
+  String get centreCapacity;
+
+  /// No description provided for @congestionAlerts.
+  ///
+  /// In en, this message translates to:
+  /// **'Congestion Alerts'**
+  String get congestionAlerts;
+
+  /// No description provided for @demandForecast.
+  ///
+  /// In en, this message translates to:
+  /// **'Demand Forecast'**
+  String get demandForecast;
+
+  /// No description provided for @anomalyDetection.
+  ///
+  /// In en, this message translates to:
+  /// **'Anomaly Detection'**
+  String get anomalyDetection;
+
+  /// No description provided for @myProcurementDay.
+  ///
+  /// In en, this message translates to:
+  /// **'My Procurement Day'**
+  String get myProcurementDay;
+
+  /// No description provided for @requiredDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Required Documents'**
+  String get requiredDocuments;
+
+  /// No description provided for @farmerIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Farmer ID'**
+  String get farmerIdLabel;
+
+  /// No description provided for @aadhaarLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Aadhaar'**
+  String get aadhaarLabel;
+
+  /// No description provided for @bankPassbookLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bank passbook'**
+  String get bankPassbookLabel;
+
+  /// No description provided for @landDocumentLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Land document'**
+  String get landDocumentLabel;
+
+  /// No description provided for @paddySampleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Paddy sample'**
+  String get paddySampleLabel;
+
+  /// No description provided for @nextAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Next action'**
+  String get nextAction;
+
+  /// No description provided for @reminderOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder ON'**
+  String get reminderOn;
+
+  /// No description provided for @reminderOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Reminder OFF'**
+  String get reminderOff;
+
+  /// No description provided for @showToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Token'**
+  String get showToken;
+
+  /// No description provided for @viewReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'View Receipt'**
+  String get viewReceipt;
+
+  /// No description provided for @centreDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Centre Documents'**
+  String get centreDocuments;
+
+  /// No description provided for @centreStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Centre Status'**
+  String get centreStatus;
+
+  /// No description provided for @activeCounters.
+  ///
+  /// In en, this message translates to:
+  /// **'Active counters'**
+  String get activeCounters;
+
+  /// No description provided for @slotCapacity.
+  ///
+  /// In en, this message translates to:
+  /// **'Slot capacity'**
+  String get slotCapacity;
+
+  /// No description provided for @closureReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Closure reason'**
+  String get closureReason;
+
+  /// No description provided for @queueCorrectionNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue position calculated from database, PROCESSING not counted as ahead'**
+  String get queueCorrectionNote;
 }
 
 class _AppLocalizationsDelegate

@@ -30,18 +30,84 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> sendOtpToEmail(String email) async {
+    await Future.delayed(AppConstants.mockDelay);
+    // mock email OTP - always succeeds, OTP is 123456
+  }
+
+  @override
   Future<AppUser> loginWithMobileAndOtp(String mobile, String otp) async {
     await Future.delayed(AppConstants.mockDelay);
     if (otp != AppConstants.demoOtp) throw Exception('Invalid OTP. Use 123456 for demo');
     final role = mobile == AppConstants.demoOperatorMobile ? 'CENTRE_OPERATOR' : 'FARMER';
     final farmer = role == 'FARMER' ? _db.demoFarmer.copyWith() : null;
-    // allow farmer mobile override
     final farmerWithMobile = farmer != null && mobile != farmer.mobile
         ? farmer.copyWith()
         : farmer;
     final user = AppUser(id: mobile == AppConstants.demoOperatorMobile ? 'op1' : _db.demoFarmer.id, mobile: mobile, role: role, farmer: farmerWithMobile);
     await LocalStorage.instance.saveAuth('mock_token_$mobile', UserRoleX.fromString(role), jsonEncode(user.toJson()));
-    // ensure demo booking exists for farmer
+    if (role == 'FARMER') _db.createDemoBookingIfMissing();
+    return user;
+  }
+
+  @override
+  Future<AppUser> loginWithMobileAndPassword(String mobile, String password) async {
+    await Future.delayed(AppConstants.mockDelay);
+    if (password.length < 6) throw Exception('Password must be at least 6 characters');
+    final stored = _db.farmerPasswords[mobile];
+    if (stored != null && stored != password) {
+      throw Exception('Invalid mobile or password');
+    }
+    // If mobile not yet registered but password looks like demo, allow any registered demo mobiles or newly registered ones.
+    // For unknown mobile with no stored password, treat as invalid unless it's a demo mobile with expected demo passwords.
+    if (stored == null) {
+      // Allow login for demoFarmer mobile with demo password if not yet overridden, or for any previously registered farmer
+      // Check if mobile matches demoFarmer's original mobile or is known in email map
+      final knownMobiles = {..._db.farmerPasswords.keys, _db.demoFarmer.mobile, AppConstants.demoOperatorMobile};
+      if (!knownMobiles.contains(mobile)) {
+        // If user registered via registerFarmer, their password was stored, so stored != null. Unknown mobile -> fail.
+        throw Exception('Account not found. Please register first.');
+      }
+      // Known demo mobile but no stored check needed: accept common demo passwords
+      const demoPasswords = ['password123', 'operator123', '123456', 'password'];
+      if (!demoPasswords.contains(password) && stored == null && mobile == AppConstants.demoOperatorMobile) {
+        throw Exception('Invalid mobile or password');
+      }
+    }
+    final role = mobile == AppConstants.demoOperatorMobile ? 'CENTRE_OPERATOR' : 'FARMER';
+    // If farmer, use stored demoFarmer or create lightweight farmer
+    Farmer? farmer;
+    if (role == 'FARMER') {
+      if (_db.demoFarmer.mobile == mobile) {
+        farmer = _db.demoFarmer;
+      } else {
+        // For other registered mobiles, try to find farmer by stored demoFarmer or synthesize
+        farmer = Farmer(
+          id: 'f_$mobile',
+          fullName: _db.demoFarmer.fullName,
+          mobile: mobile,
+          farmerId: _db.demoFarmer.farmerId,
+          village: _db.demoFarmer.village,
+          district: _db.demoFarmer.district,
+          languageCode: _db.demoFarmer.languageCode,
+          primaryCommodity: _db.demoFarmer.primaryCommodity,
+        );
+      }
+    }
+    final user = AppUser(id: mobile == AppConstants.demoOperatorMobile ? 'op1' : farmer?.id ?? 'f_$mobile', mobile: mobile, role: role, farmer: farmer);
+    await LocalStorage.instance.saveAuth('mock_token_$mobile', UserRoleX.fromString(role), jsonEncode(user.toJson()));
+    if (role == 'FARMER') _db.createDemoBookingIfMissing();
+    return user;
+  }
+
+  @override
+  Future<AppUser> loginWithEmailAndOtp(String email, String otp) async {
+    await Future.delayed(AppConstants.mockDelay);
+    if (otp != AppConstants.demoOtp) throw Exception('Invalid OTP. Use 123456 for demo');
+    final role = email.contains('operator') ? 'CENTRE_OPERATOR' : 'FARMER';
+    final farmer = role == 'FARMER' ? _db.demoFarmer.copyWith() : null;
+    final user = AppUser(id: email.hashCode.toString(), mobile: email, role: role, farmer: farmer);
+    await LocalStorage.instance.saveAuth('mock_token_$email', UserRoleX.fromString(role), jsonEncode(user.toJson()));
     if (role == 'FARMER') _db.createDemoBookingIfMissing();
     return user;
   }
@@ -50,6 +116,8 @@ class MockAuthRepository implements AuthRepository {
   Future<AppUser> registerFarmer({
     required String fullName,
     required String mobile,
+    required String password,
+    String? email,
     required String farmerId,
     required String village,
     required String district,
@@ -57,6 +125,7 @@ class MockAuthRepository implements AuthRepository {
     required String primaryCommodity,
   }) async {
     await Future.delayed(AppConstants.mockDelay);
+    if (password.length < 6) throw Exception('Password must be at least 6 characters');
     final farmer = Farmer(
       id: 'f_${DateTime.now().millisecondsSinceEpoch}',
       fullName: fullName,
@@ -68,10 +137,13 @@ class MockAuthRepository implements AuthRepository {
       primaryCommodity: primaryCommodity,
     );
     _db.demoFarmer = farmer;
+    _db.farmerPasswords[mobile] = password;
+    if (email != null && email.trim().isNotEmpty) {
+      _db.emailToMobile[email.trim()] = mobile;
+    }
     final user = AppUser(id: farmer.id, mobile: mobile, role: 'FARMER', farmer: farmer);
     await LocalStorage.instance.saveAuth('mock_token_$mobile', UserRole.farmer, jsonEncode(user.toJson()));
     await LocalStorage.instance.saveLanguage(languageCode);
-    // create booking after register? not yet
     return user;
   }
 

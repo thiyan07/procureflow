@@ -23,7 +23,30 @@ class ApiCentreRepository implements CentreRepository {
   @override
   Future<List<ProcurementCentre>> getCentres() async {
     final list = await _client.getList('/api/v1/centres');
-    return list.map((e) => _map(e as Map<String, dynamic>)).toList();
+    final centres = list.map((e) => _map(e as Map<String, dynamic>)).toList();
+    // Enrich with real queue/status from GET /centres/{id}/status (real DB)
+    final enriched = <ProcurementCentre>[];
+    for (final c in centres) {
+      try {
+        final status = await _client.get('/api/v1/centres/${c.id}/status');
+        enriched.add(ProcurementCentre(
+          id: c.id,
+          name: c.name,
+          location: c.location,
+          district: c.district,
+          lat: c.lat,
+          lng: c.lng,
+          status: (status['centre'] as Map?)?['status'] as String? ?? c.status,
+          currentQueue: status['current_queue_size'] as int? ?? c.currentQueue,
+          estimatedWaitMinutes: status['estimated_wait_minutes'] as int? ?? c.estimatedWaitMinutes,
+          availableSlots: status['available_slots'] as int? ?? c.availableSlots,
+          commodities: c.commodities,
+        ));
+      } catch (_) {
+        enriched.add(c);
+      }
+    }
+    return enriched;
   }
 
   @override

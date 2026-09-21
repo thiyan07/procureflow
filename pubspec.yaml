@@ -19,6 +19,8 @@ dependencies:
   fl_chart: ^0.68.0
   qr_flutter: ^4.1.0
   http: ^1.2.2
+  share_plus: ^10.1.4
+  path_provider: ^2.1.5
   # Firebase messaging - enable when configuring FCM (see backend/backend README)
   # firebase_core: ^2.24.0
   # firebase_messaging: ^14.7.0

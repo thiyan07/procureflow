@@ -106,11 +106,11 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                     const SizedBox(width:12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('$farmersAhead farmers ahead', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text('Wait ~$wait min • ETA ${AppDateUtils.formatTime(eta)}', style: const TextStyle(fontSize:12, color: Colors.black54)),
+                      Text('Wait ~$wait min • ETA ${AppDateUtils.formatTime(eta)}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       const SizedBox(height:4),
                       LinearProgressIndicator(value: farmersAhead==0?1: 1-(farmersAhead/15).clamp(0,1), minHeight:6, backgroundColor: const Color(0xFFE0E5DE), color: farmersAhead<=2? const Color(0xFFEF6C00): const Color(0xFF2E7D32)),
                       const SizedBox(height:2),
-                      Text('Status: ${queue?.status.name.toUpperCase() ?? booking.queueStatus.name.toUpperCase()} • ${wait} min', style: const TextStyle(fontSize:10, color: Colors.black45)),
+                      Text('Status: ${queue?.status.name.toUpperCase() ?? booking.queueStatus.name.toUpperCase()} • ${wait} min', style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ])),
                   ]),
                   const SizedBox(height:8),
@@ -121,14 +121,14 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                 if ((capacity['warnings'] as List?)?.isNotEmpty == true) AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children:[const Icon(Icons.warning_amber, color: Color(0xFFEF6C00)), const SizedBox(width:6), const Text('Centre Capacity', style: TextStyle(fontWeight: FontWeight.w700, fontSize:12))]),
                   const SizedBox(height:6),
-                  Text('Total ${capacity['total_capacity']} • Used ${capacity['used_capacity']} • Remaining ${capacity['remaining_capacity']} • Queue ${capacity['current_queue']}', style: const TextStyle(fontSize:11, color: Colors.black54)),
+                  Text('Total ${capacity['total_capacity']} • Used ${capacity['used_capacity']} • Remaining ${capacity['remaining_capacity']} • Queue ${capacity['current_queue']}', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height:6),
                   ...(capacity['warnings'] as List).map((w)=> Padding(padding: const EdgeInsets.symmetric(vertical:2), child: Row(children:[const Icon(Icons.circle, size:6, color: Color(0xFFEF6C00)), const SizedBox(width:6), Expanded(child: Text(w.toString(), style: const TextStyle(fontSize:11, color: Color(0xFFBF360C))))]))),
                 ])),
                 if ((capacity['warnings'] as List?)?.isNotEmpty == true) const SizedBox(height:12),
                 // Documents checklist with Required/Completed/Missing
                 AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children:[const Text('Required Documents', style: TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: const Text('Demo checklist — not official gov list', style: TextStyle(fontSize:9, color: Colors.black54)))]),
+                  Row(children:[Text('Required Documents', style: TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: Text('Bring originals + photocopy', style: TextStyle(fontSize:9, color: Theme.of(context).colorScheme.onSurfaceVariant)))]),
                   const SizedBox(height:8),
                   ...docsList.map((doc){
                     final key = doc['label'] as String;
@@ -141,20 +141,20 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                       const SizedBox(width:8),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                         Text(label, style: TextStyle(fontSize:12, decoration: done? TextDecoration.lineThrough: null)),
-                        Text('${required? 'Required':'Optional'}${desc.isNotEmpty ? ' • $desc':''}', style: TextStyle(fontSize:10, color: required? Colors.red.shade700: Colors.black45)),
+                        Text('${required? 'Required':'Optional'}${desc.isNotEmpty ? ' • $desc':''}', style: TextStyle(fontSize:10, color: required? Colors.red.shade700: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ])),
                       Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: done? const Color(0xFFE8F5E9): required? const Color(0xFFFFEBEE): Colors.grey.shade100, borderRadius: BorderRadius.circular(10)), child: Text(done? 'Completed': required? 'Missing':'Optional', style: TextStyle(fontSize:10, color: done? const Color(0xFF2E7D32): required? Colors.red: Colors.grey))),
                     ])));
                   }),
                   const SizedBox(height:8),
-                  Text('${_docsCompleted.values.where((v)=>v).length}/${docsList.length} ready • Bring originals + 1 photocopy. No sensitive docs stored.', style: const TextStyle(fontSize:11, color: Colors.black45)),
+                  Text('${_docsCompleted.values.where((v)=>v).length}/${docsList.length} ready • Bring originals + 1 photocopy. No sensitive docs stored.', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ])),
                 const SizedBox(height:12),
                 // Procurement + Payment
                 if (timeline!=null) AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Procurement Progress', style: TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height:8),
-                  ...timeline.map((t)=> Padding(padding: const EdgeInsets.symmetric(vertical:4), child: Row(children: [Icon(t.isCompleted? Icons.check_circle: t.isCurrent? Icons.radio_button_checked: Icons.radio_button_unchecked, size:16, color: t.isCompleted? const Color(0xFF2E7D32): t.isCurrent? const Color(0xFFEF6C00): Colors.grey), const SizedBox(width:8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(t.title, style: TextStyle(fontSize:12, fontWeight: t.isCurrent? FontWeight.w700: FontWeight.normal)), Text(t.subtitle, style: const TextStyle(fontSize:11, color: Colors.black54))]))]))),
+                  ...timeline.map((t)=> Padding(padding: const EdgeInsets.symmetric(vertical:4), child: Row(children: [Icon(t.isCompleted? Icons.check_circle: t.isCurrent? Icons.radio_button_checked: Icons.radio_button_unchecked, size:16, color: t.isCompleted? const Color(0xFF2E7D32): t.isCurrent? const Color(0xFFEF6C00): Colors.grey), SizedBox(width:8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(t.title, style: TextStyle(fontSize:12, fontWeight: t.isCurrent? FontWeight.w700: FontWeight.normal)), Text(t.subtitle, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant))]))]))),
                   const SizedBox(height:8),
                   if (payment!=null) Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: (payment.status.toString().contains('completed')? const Color(0xFFE8F5E9): const Color(0xFFFFF3E0)), borderRadius: BorderRadius.circular(8)), child: Row(children:[Icon(payment.status.toString().contains('completed')? Icons.check_circle: Icons.payments, color: payment.status.toString().contains('completed')? const Color(0xFF2E7D32): const Color(0xFFEF6C00), size:16), const SizedBox(width:6), Expanded(child: Text('Payment: ${payment.status.toString().split('.').last.toUpperCase()} • ₹${payment.totalAmount.toStringAsFixed(0)} • ${payment.transactionId ?? 'Pending'}', style: const TextStyle(fontSize:11)))])),
                 ])),
@@ -168,7 +168,7 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                   Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.qr_code), label: const Text('Show Token'), onPressed: ()=> context.push('/token'))),
                 ]),
                 const SizedBox(height:6),
-                Text(_reminderOn? 'Reminder: 30 min before slot • Queue movement • Turn approaching — via FCM (mock if no creds)':'Enable reminder for slot updates', textAlign: TextAlign.center, style: const TextStyle(fontSize:10, color: Colors.black45)),
+                Text(_reminderOn? 'Reminder: 30 min before slot • Queue movement • Turn approaching — via FCM (mock if no creds)':'Enable reminder for slot updates', textAlign: TextAlign.center, style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ]);
             },
           );
@@ -190,7 +190,7 @@ class _Row extends StatelessWidget {
   final String label; final String value;
   const _Row({required this.label, required this.value});
   @override
-  Widget build(BuildContext context)=> Padding(padding: const EdgeInsets.symmetric(vertical:2), child: Row(children: [SizedBox(width:90, child: Text(label, style: const TextStyle(color: Colors.black54, fontSize:11))), Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize:12)))]));
+  Widget build(BuildContext context)=> Padding(padding: const EdgeInsets.symmetric(vertical:2), child: Row(children: [SizedBox(width:90, child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:11))), Expanded(child: Text(value, style: TextStyle(fontWeight: FontWeight.w600, fontSize:12)))]));
 }
 
 final _activeBookingProvider = FutureProvider<Booking?>((ref) async {

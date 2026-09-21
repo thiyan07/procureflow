@@ -303,4 +303,104 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get paymentPending => 'பணம் நிலுவையில்';
+
+  @override
+  String get addCommodity => 'பயிரைச் சேர்க்க';
+
+  @override
+  String get removeCommodity => 'அகற்று';
+
+  @override
+  String get multiCommoditySupported => 'பல பயிர் ஆதரிக்கப்படுகிறது';
+
+  @override
+  String get weighment => 'எடை';
+
+  @override
+  String get qualityCheck => 'தர சோதனை';
+
+  @override
+  String get receipt => 'ரசீது';
+
+  @override
+  String get digitalReceipt => 'டிஜிட்டல் ரசீது';
+
+  @override
+  String get capacityWarnings => 'கொள்ளளவு எச்சரிக்கை';
+
+  @override
+  String get queueMessages => 'வரிசை செய்திகள்';
+
+  @override
+  String get bookingMessages => 'முன்பதிவு செய்திகள்';
+
+  @override
+  String get procurementStatus => 'கொள்முதல் நிலை';
+
+  @override
+  String get centreCapacity => 'மைய கொள்ளளவு';
+
+  @override
+  String get congestionAlerts => 'நெரிசல் எச்சரிக்கை';
+
+  @override
+  String get demandForecast => 'தேவை முன்னறிவிப்பு';
+
+  @override
+  String get anomalyDetection => 'முரண் கண்டறிதல்';
+
+  @override
+  String get myProcurementDay => 'என் கொள்முதல் நாள்';
+
+  @override
+  String get requiredDocuments => 'தேவையான ஆவணங்கள்';
+
+  @override
+  String get farmerIdLabel => 'விவசாயி ஐடி';
+
+  @override
+  String get aadhaarLabel => 'ஆதார்';
+
+  @override
+  String get bankPassbookLabel => 'வங்கி புத்தகம்';
+
+  @override
+  String get landDocumentLabel => 'நில ஆவணம்';
+
+  @override
+  String get paddySampleLabel => 'நெல் மாதிரி';
+
+  @override
+  String get nextAction => 'அடுத்த செயல்';
+
+  @override
+  String get reminderOn => 'நினைவூட்டல் ON';
+
+  @override
+  String get reminderOff => 'நினைவூட்டல் OFF';
+
+  @override
+  String get showToken => 'டோக்கன் காட்டு';
+
+  @override
+  String get viewReceipt => 'ரசீதைக் காண்க';
+
+  @override
+  String get centreDocuments => 'மைய ஆவணங்கள்';
+
+  @override
+  String get centreStatus => 'மைய நிலை';
+
+  @override
+  String get activeCounters => 'செயலில் கவுண்டர்கள்';
+
+  @override
+  String get slotCapacity => 'ஸ்லாட் கொள்ளளவு';
+
+  @override
+  String get closureReason => 'மூடல் காரணம்';
+
+  @override
+  String get queueCorrectionNote =>
+      'வரிசை நிலை தரவுத்தளத்திலிருந்து, PROCESSING முன்னால் எண்ணப்படவில்லை';
 }

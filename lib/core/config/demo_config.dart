@@ -39,6 +39,23 @@ class DemoConfig {
   /// Label shown in UI to clearly indicate demo data
   static const String demoBadgeLabel = 'DEMO MODE • Mock backend';
 
+  /// Production check — fail fast if production is misconfigured
+  static void validateProduction() {
+    const env = String.fromEnvironment('APP_ENV', defaultValue: 'dev');
+    const apiUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000');
+    if (env == 'prod') {
+      if (useMockBackend) {
+        throw StateError('Production must not use Mock backend: set --dart-define=USE_MOCK=false');
+      }
+      if (apiUrl.contains('127.0.0.1') || apiUrl.contains('localhost')) {
+        throw StateError('Production API_BASE_URL must not be localhost: $apiUrl');
+      }
+      if (apiUrl == 'http://127.0.0.1:8000') {
+        throw StateError('Production API_BASE_URL must be set via --dart-define=API_BASE_URL=https://your-api.com');
+      }
+    }
+  }
+
   /// Documentation for future migration:
   /// 1. Implement ApiAuthRepository, ApiSlotRepository, etc. in lib/services/api/
   /// 2. In lib/services/providers.dart, switch providers:

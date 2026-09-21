@@ -26,15 +26,19 @@ class TokenScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE0E5DE)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius:12, offset: const Offset(0,4))]),
               child: Column(children: [
-                const Text('TOKEN', style: TextStyle(letterSpacing:2, fontWeight: FontWeight.w800, color: Colors.black54, fontSize:12)),
+                Text('TOKEN', style: TextStyle(letterSpacing:2, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
                 const SizedBox(height:6),
                 Text(booking.tokenNumber, style: const TextStyle(fontSize:48, fontWeight: FontWeight.w900, color: Color(0xFF1B5E20))),
                 const SizedBox(height:4),
                 StatusChip(label: booking.queueStatus.name.toUpperCase(), color: const Color(0xFF2E7D32), icon: Icons.schedule),
                 const SizedBox(height:16),
-                QrImageView(data: 'PROCUREFLOW|${booking.id}|${booking.tokenNumber}|${booking.centreId}', version: QrVersions.auto, size: 160),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  child: QrImageView(data: 'PROCUREFLOW|${booking.id}|${booking.tokenNumber}|${booking.centreId}', version: QrVersions.auto, size: 160, backgroundColor: Colors.white, eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black), dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black)),
+                ),
                 const SizedBox(height:6),
-                const Text('Show this QR at the centre gate', style: TextStyle(fontSize:11, color: Colors.black54)),
+                Text('Show this QR at the centre gate', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const Divider(height:32),
                 _Row(label: 'Centre', value: booking.centreName),
                 const SizedBox(height:8),
@@ -63,7 +67,7 @@ class TokenScreen extends ConsumerWidget {
                   const SizedBox(height:12),
                   LinearProgressIndicator(value: q.farmersAhead==0?1: 1 - (q.farmersAhead/20).clamp(0,1), backgroundColor: const Color(0xFFE0E5DE), color: const Color(0xFF2E7D32)),
                   const SizedBox(height:8),
-                  Text('${q.farmersAhead} farmers ahead', style: const TextStyle(color: Colors.black54, fontSize:12)),
+                  Text('${q.farmersAhead} farmers ahead', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
                   const SizedBox(height:12),
                   SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.track_changes), label: const Text('TRACK LIVE QUEUE'), onPressed: ()=> context.push('/queue'))),
                 ]));
@@ -81,7 +85,7 @@ class _Row extends StatelessWidget {
   const _Row({required this.label, required this.value});
   @override
   Widget build(BuildContext context)=> Row(children:[
-    SizedBox(width:90, child: Text(label, style: const TextStyle(color: Colors.black54, fontSize:12))),
+    SizedBox(width:90, child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12))),
     Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize:13))),
   ]);
 }
@@ -90,7 +94,7 @@ class _Mini extends StatelessWidget {
   const _Mini({required this.label, required this.value});
   @override
   Widget build(BuildContext context)=> Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-    Text(label, style: const TextStyle(fontSize:11, color: Colors.black54)),
+    Text(label, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize:16)),
   ]);
 }

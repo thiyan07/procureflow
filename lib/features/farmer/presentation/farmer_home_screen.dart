@@ -96,9 +96,9 @@ class FarmerHomeScreen extends ConsumerWidget {
                 child: Row(children: [
                   Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFEDE7F6), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.smart_toy_outlined, color: Color(0xFF4527A0))),
                   const SizedBox(width: 12),
-                  const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('AI Assistant', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('Ask: Where is my token?', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('AI Assistant', style: TextStyle(fontWeight: FontWeight.w600)),
+                    Text('Ask: Where is my token?', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ])),
                   const Icon(Icons.chevron_right),
                 ]),
@@ -151,7 +151,7 @@ class _ActiveBookingCard extends ConsumerWidget {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(AppDateUtils.formatTime(booking.slotStart), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
                 Text(booking.centreName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text(AppDateUtils.formatDate(booking.date), style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                Text(AppDateUtils.formatDate(booking.date), style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -172,9 +172,9 @@ class _ActiveBookingCard extends ConsumerWidget {
                   const SizedBox(width: 16),
                   _MiniStat(label: 'Est. wait', value: '${q.estimatedWaitMinutes} min'),
                   const Spacer(),
-                  const Icon(Icons.groups_outlined, size: 18, color: Colors.black45),
+                  Icon(Icons.groups_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width:4),
-                  Text('Now: #${q.currentTokenOrdinal}', style: const TextStyle(fontSize:12, color: Colors.black54)),
+                  Text('Now: #${q.currentTokenOrdinal}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ]),
                 const SizedBox(height:12),
                 SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.track_changes), label: const Text('TRACK QUEUE'), onPressed: () => context.push('/queue'))),
@@ -198,7 +198,7 @@ class _MiniStat extends StatelessWidget {
   const _MiniStat({required this.label, required this.value});
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+    Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
   ]);
 }

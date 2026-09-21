@@ -74,6 +74,18 @@ class MockDatabase {
     primaryCommodity: 'Paddy',
   );
 
+  // Stored passwords for mock mobile+password login (mobile -> password)
+  // Demo defaults: farmer 9876543210 / password123 , operator 9876543211 / operator123
+  final Map<String, String> farmerPasswords = {
+    '9876543210': 'password123',
+    '9876543211': 'operator123',
+  };
+  // Optional email mapping (email -> mobile) for Brevo flow
+  final Map<String, String> emailToMobile = {
+    'farmer@procureflow.in': '9876543210',
+    'operator@procureflow.in': '9876543211',
+  };
+
   List<Slot> generateSlots(String centreId, DateTime date) {
     final key = '${centreId}_${date.year}-${date.month}-${date.day}';
     if (slotsByKey.containsKey(key)) return slotsByKey[key]!;

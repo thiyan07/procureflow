@@ -21,7 +21,9 @@ def create_farmer(payload: FarmerCreate, db: Session = Depends(get_db), user: Us
     if db.query(Farmer).filter(Farmer.farmer_id == payload.farmer_id).first():
         raise HTTPException(status_code=400, detail={"code": "DUPLICATE", "message": "Farmer ID already exists"})
     # mobile must match user mobile unless admin
-    if payload.mobile != user.mobile and user.role != UserRole.ADMIN.value:
+    # Fix for email users: if user has placeholder mobile (email_... or 999...), allow any valid mobile
+    is_placeholder = user.mobile.startswith("999") or user.mobile.startswith("email_") or "@" in user.mobile or not user.mobile.isdigit() or len(user.mobile) != 10
+    if payload.mobile != user.mobile and not is_placeholder and user.role != UserRole.ADMIN.value:
         raise HTTPException(status_code=400, detail={"code": "MOBILE_MISMATCH", "message": "Mobile must match authenticated user"})
     farmer = Farmer(user_id=user.id, full_name=payload.full_name, mobile=payload.mobile, farmer_id=payload.farmer_id, village=payload.village, district=payload.district, language_code=payload.language_code, primary_commodity=payload.primary_commodity)
     db.add(farmer)

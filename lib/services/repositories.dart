@@ -7,12 +7,17 @@ import '../models/payment.dart';
 import '../models/analytics.dart';
 
 // Auth abstraction - mockable, later replace with Firebase/API
+// Dual login: Mobile + Password (DB stored) and Email + OTP (Brevo)
 abstract class AuthRepository {
   Future<AppUser?> getCurrentUser();
   Future<AppUser> loginWithMobileAndOtp(String mobile, String otp);
+  Future<AppUser> loginWithMobileAndPassword(String mobile, String password);
+  Future<AppUser> loginWithEmailAndOtp(String email, String otp);
   Future<AppUser> registerFarmer({
     required String fullName,
     required String mobile,
+    required String password,
+    String? email,
     required String farmerId,
     required String village,
     required String district,
@@ -21,6 +26,7 @@ abstract class AuthRepository {
   });
   Future<void> logout();
   Future<void> sendOtp(String mobile);
+  Future<void> sendOtpToEmail(String email);
 }
 
 abstract class FarmerRepository {

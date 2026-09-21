@@ -174,7 +174,9 @@ def list_bookings(db: Session = Depends(get_db), user: User = Depends(get_curren
     out = []
     for b in bookings:
         qt = db.query(QueueToken).filter(QueueToken.booking_id == b.id).first()
-        out.append(BookingOut(id=b.id, farmer_id=b.farmer_id, centre_id=b.centre_id, slot_id=b.slot_id, commodity_name=b.commodity_name, estimated_quantity=b.estimated_quantity, token_number=b.token_number, queue_token_id=qt.id if qt else None, date=b.date, status=b.status, created_at=b.created_at, commodities=_commodities_for_booking(b)))
+        centre = db.get(ProcurementCentre, b.centre_id)
+        slot = db.get(Slot, b.slot_id)
+        out.append(BookingOut(id=b.id, farmer_id=b.farmer_id, centre_id=b.centre_id, slot_id=b.slot_id, commodity_name=b.commodity_name, estimated_quantity=b.estimated_quantity, token_number=b.token_number, queue_token_id=qt.id if qt else None, date=b.date, status=b.status, created_at=b.created_at, centre_name=centre.name if centre else None, slot_start=str(slot.start_time) if slot else None, slot_end=str(slot.end_time) if slot else None, queue_position=qt.position if qt else None, estimated_wait=qt.estimated_wait_minutes if qt else None, commodities=_commodities_for_booking(b)))
     return out
 
 @router.get("/{booking_id}", response_model=BookingOut)
@@ -192,7 +194,9 @@ def get_booking(booking_id: str, db: Session = Depends(get_db), user: User = Dep
         else:
             raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Not authorized"})
     qt = db.query(QueueToken).filter(QueueToken.booking_id == booking.id).first()
-    return BookingOut(id=booking.id, farmer_id=booking.farmer_id, centre_id=booking.centre_id, slot_id=booking.slot_id, commodity_name=booking.commodity_name, estimated_quantity=booking.estimated_quantity, token_number=booking.token_number, queue_token_id=qt.id if qt else None, date=booking.date, status=booking.status, created_at=booking.created_at, commodities=_commodities_for_booking(booking))
+    centre = db.get(ProcurementCentre, booking.centre_id)
+    slot = db.get(Slot, booking.slot_id)
+    return BookingOut(id=booking.id, farmer_id=booking.farmer_id, centre_id=booking.centre_id, slot_id=booking.slot_id, commodity_name=booking.commodity_name, estimated_quantity=booking.estimated_quantity, token_number=booking.token_number, queue_token_id=qt.id if qt else None, date=booking.date, status=booking.status, created_at=booking.created_at, centre_name=centre.name if centre else None, slot_start=str(slot.start_time) if slot else None, slot_end=str(slot.end_time) if slot else None, queue_position=qt.position if qt else None, estimated_wait=qt.estimated_wait_minutes if qt else None, commodities=_commodities_for_booking(booking))
 
 class RescheduleRequest(BaseModel):
     new_slot_id: str
@@ -278,6 +282,14 @@ def cancel_booking(booking_id: str, db: Session = Depends(get_db), user: User = 
         evt = QueueEvent(token_id=qt.id, from_status=qt.status, to_status=QueueStatus.CANCELLED.value, actor=user.id)
         db.add(evt)
         qt.status = QueueStatus.CANCELLED.value
+    # mark payment as FAILED so it doesn't show in payment_pending (cancelled bookings shouldn't be pending)
+    try:
+        from app.models.payment import Payment, PaymentStatus
+        pay = db.query(Payment).filter(Payment.booking_id == booking.id).first()
+        if pay and pay.status == PaymentStatus.PENDING.value:
+            pay.status = PaymentStatus.FAILED.value
+    except Exception:
+        pass
     # notify farmer
     try:
         from app.services.notification_service import create_notification

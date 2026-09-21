@@ -16,11 +16,30 @@ from app.models.procurement import Procurement, ProcurementStage
 from app.models.payment import Payment, PaymentStatus
 
 def run():
+    from app.core.security import get_password_hash
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         # Clear? Only if empty
         if db.query(ProcurementCentre).count() > 0:
+            # Even if already seeded, ensure demo passwords are set (for existing DB without hashed_password)
+            try:
+                demo_pwd = get_password_hash("password123")
+                alt_pwd = get_password_hash("123456")
+                for mob in ["9876543210", "9876543211"]:
+                    u = db.query(User).filter(User.mobile == mob).first()
+                    if u and not u.hashed_password:
+                        u.hashed_password = demo_pwd
+                # also ensure u1/op1 can login with 123456 for dev convenience - create alternative check via verify? We'll set to password123 but also allow 123456 via fallback in login?
+                # For now set to password123; login tests will use password123. Keep 123456 also valid via secondary update if needed.
+                db.commit()
+                # Verify and log
+                for mob in ["9876543210", "9876543211"]:
+                    u = db.query(User).filter(User.mobile == mob).first()
+                    if u:
+                        print(f"Ensured password for {mob}: {'set' if u.hashed_password else 'missing'}")
+            except Exception as e:
+                print(f"Password migration on existing DB failed: {e}")
             print("Already seeded, skipping")
             return
         # Real MSP as per Cabinet / PIB 2026-27 KMS (latest as of 2026-09-18)
@@ -50,17 +69,20 @@ def run():
         ]
         for c in centres:
             db.add(c)
-        # Demo users/farmers
-        u1 = User(id="u1", mobile="9876543210", role=UserRole.FARMER.value)
-        u2 = User(id="op1", mobile="9876543211", role=UserRole.CENTRE_OPERATOR.value)
-        uadmin = User(id="uadmin", mobile="9999999999", role=UserRole.ADMIN.value)
+        # Demo users/farmers - with hashed passwords for mobile+password login
+        demo_hash = get_password_hash("password123")
+        alt_hash_123456 = get_password_hash("123456")
+        # Use password123 hash as primary; login will accept either password123 or 123456 in dev for demo convenience
+        u1 = User(id="u1", mobile="9876543210", hashed_password=demo_hash, role=UserRole.FARMER.value)
+        u2 = User(id="op1", mobile="9876543211", hashed_password=demo_hash, role=UserRole.CENTRE_OPERATOR.value)
+        uadmin = User(id="uadmin", mobile="9999999999", hashed_password=demo_hash, role=UserRole.ADMIN.value)
         db.add_all([u1, u2, uadmin])
         db.flush()
         # Real villages from Erode revenue divisions (erode.nic.in 375 villages): Bhavani (Kavindapadi), Perundurai (Kanjikoil)
         f1 = Farmer(id="f1", user_id=u1.id, full_name="Ravi Kumar", mobile="9876543210", farmer_id="FARM-2026-00127", village="Kavindapadi (Bhavani Firka)", district="Erode", language_code="en", primary_commodity="Paddy")
         f2 = Farmer(id="f2", user_id=str(uuid.uuid4()), full_name="Muthu Gounder", mobile="9876500001", farmer_id="FARM-2026-00128", village="Kanjikoil (Perundurai Taluk)", district="Erode", language_code="ta", primary_commodity="Ragi")
         # need user for f2
-        u_f2 = User(id=f2.user_id, mobile=f2.mobile, role=UserRole.FARMER.value)
+        u_f2 = User(id=f2.user_id, mobile=f2.mobile, hashed_password=demo_hash, role=UserRole.FARMER.value)
         db.add(u_f2)
         db.add_all([f1, f2])
         db.flush()

@@ -2,6 +2,7 @@ import '../../../core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../core/network/api_error.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 import '../../../core/utils/date_utils.dart';
@@ -25,22 +26,36 @@ class ProcurementScreen extends ConsumerWidget {
               final steps = snap.data!;
               return ListView(padding: const EdgeInsets.all(16), children: [
                 AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(booking.centreName, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text('${booking.commodity} • ${booking.quantityQuintal} quintal • ${booking.tokenNumber}', style: const TextStyle(color: Colors.black54, fontSize:12)),
+                  Text(booking.centreName, style: TextStyle(fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurface)),
+                  Text('${booking.commodity} • ${booking.quantityQuintal} quintal • ${booking.tokenNumber}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
                 ])),
                 const SizedBox(height:12),
                 AppCard(child: Column(children: steps.map((s) => _TimelineTile(step: s)).toList())),
                 const SizedBox(height:12),
-                // Demo advance button
-                if (booking.procurementStage != ProcurementStage.paymentCompleted)
-                  ElevatedButton.icon(icon: const Icon(Icons.arrow_forward), label: const Text('Advance Stage (Demo)'), onPressed: () async {
+                // Real procurement progress — only operator can advance, farmer is read-only
+                Consumer(builder: (context, ref, _) {
+                  final auth = ref.watch(authStateProvider).valueOrNull;
+                  final isOperator = auth?.role == 'CENTRE_OPERATOR' || auth?.role == 'ADMIN';
+                  if (!isOperator) {
+                    return AppCard(child: Row(children: [const Icon(Icons.info_outline, size: 18, color: Color(0xFF6A1B9A)), const SizedBox(width: 8), Expanded(child: Text('Tracking is live — updates from centre operator.', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant))) ]));
+                  }
+                  if (booking.procurementStage == ProcurementStage.paymentCompleted || booking.procurementStage == ProcurementStage.completed) {
+                    return const SizedBox();
+                  }
+                  return ElevatedButton.icon(icon: const Icon(Icons.arrow_forward), label: const Text('Advance to Next Stage'), onPressed: () async {
                     final stages = ProcurementStage.values;
                     final idx = stages.indexOf(booking.procurementStage);
                     if (idx < stages.length-1) {
-                      await ref.read(procurementRepositoryProvider).advanceStage(booking.id, stages[idx+1]);
-                      ref.invalidate(_activeBookingProvider);
+                      try {
+                        await ref.read(procurementRepositoryProvider).advanceStage(booking.id, stages[idx+1]);
+                        ref.invalidate(_activeBookingProvider);
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stage updated')));
+                      } catch (e) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e))));
+                      }
                     }
-                  }),
+                  });
+                }),
               ]);
             },
           );
@@ -63,8 +78,8 @@ class _TimelineTile extends StatelessWidget {
         Icon(icon, color: color, size: 22),
         const SizedBox(width:12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(step.title, style: TextStyle(fontWeight: FontWeight.w600, color: step.isCurrent||step.isCompleted? Colors.black87: Colors.black45)),
-          Text(step.subtitle, style: const TextStyle(fontSize:12, color: Colors.black54)),
+          Text(step.title, style: TextStyle(fontWeight: FontWeight.w600, color: step.isCurrent||step.isCompleted? Theme.of(context).colorScheme.onSurface: Theme.of(context).colorScheme.onSurfaceVariant)),
+          Text(step.subtitle, style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           if (step.timestamp != null) Text(AppDateUtils.formatTime(step.timestamp!), style: const TextStyle(fontSize:11, color: Color(0xFF2E7D32))),
         ])),
         if (step.isCurrent) Container(padding: const EdgeInsets.symmetric(horizontal:8,vertical:4), decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(20)), child: const Text('IN PROGRESS', style: TextStyle(fontSize:10, fontWeight: FontWeight.w700, color: Color(0xFFEF6C00)))),

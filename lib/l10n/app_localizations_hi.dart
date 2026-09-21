@@ -303,4 +303,104 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get paymentPending => 'भुगतान लंबित';
+
+  @override
+  String get addCommodity => 'फसल जोड़ें';
+
+  @override
+  String get removeCommodity => 'हटाएं';
+
+  @override
+  String get multiCommoditySupported => 'बहु-फसल समर्थित';
+
+  @override
+  String get weighment => 'तौल';
+
+  @override
+  String get qualityCheck => 'गुणवत्ता जाँच';
+
+  @override
+  String get receipt => 'रसीद';
+
+  @override
+  String get digitalReceipt => 'डिजिटल रसीद';
+
+  @override
+  String get capacityWarnings => 'क्षमता चेतावनी';
+
+  @override
+  String get queueMessages => 'कतार संदेश';
+
+  @override
+  String get bookingMessages => 'बुकिंग संदेश';
+
+  @override
+  String get procurementStatus => 'खरीद स्थिति';
+
+  @override
+  String get centreCapacity => 'केंद्र क्षमता';
+
+  @override
+  String get congestionAlerts => 'भीड़ चेतावनी';
+
+  @override
+  String get demandForecast => 'मांग पूर्वानुमान';
+
+  @override
+  String get anomalyDetection => 'विसंगति पहचान';
+
+  @override
+  String get myProcurementDay => 'मेरा खरीद दिवस';
+
+  @override
+  String get requiredDocuments => 'आवश्यक दस्तावेज़';
+
+  @override
+  String get farmerIdLabel => 'किसान आईडी';
+
+  @override
+  String get aadhaarLabel => 'आधार';
+
+  @override
+  String get bankPassbookLabel => 'बैंक पासबुक';
+
+  @override
+  String get landDocumentLabel => 'भूमि दस्तावेज़';
+
+  @override
+  String get paddySampleLabel => 'धान नमूना';
+
+  @override
+  String get nextAction => 'अगली कार्रवाई';
+
+  @override
+  String get reminderOn => 'रिमाइंडर चालू';
+
+  @override
+  String get reminderOff => 'रिमाइंडर बंद';
+
+  @override
+  String get showToken => 'टोकन दिखाएं';
+
+  @override
+  String get viewReceipt => 'रसीद देखें';
+
+  @override
+  String get centreDocuments => 'केंद्र दस्तावेज़';
+
+  @override
+  String get centreStatus => 'केंद्र स्थिति';
+
+  @override
+  String get activeCounters => 'सक्रिय काउंटर';
+
+  @override
+  String get slotCapacity => 'स्लॉट क्षमता';
+
+  @override
+  String get closureReason => 'बंद कारण';
+
+  @override
+  String get queueCorrectionNote =>
+      'कतार स्थिति डेटाबेस से, PROCESSING आगे नहीं गिना जाता';
 }

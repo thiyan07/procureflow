@@ -22,11 +22,34 @@
 - Fallback: occupancy `>0.7 HIGH`.
 - API: `GET /api/v1/ai/centre-load/{centre_id}?target_date=` returns `{level, score, reason, forecast_3d, model_info}`.
 
-## Fallback Strategy
-All AI calls wrapped `try/except` → rule-based. Booking never fails due to AI. Synthetic data marked `trained_on: synthetic demo data`.
+## Real Operational Data (Inputs from PostgreSQL)
+- `farmers_ahead` from `queue_tokens` `position<your && status in [WAITING,CALLED,ARRIVED]` (PROCESSING not counted)
+- `avg_processing_minutes` `active_counters` from `procurement_centres`
+- `centre_load` `slot.booked/capacity` from `slots`
+- `booking quantity` `estimated_quantity` `commodities_json` from `bookings`
+- `historical bookings` 7d `Booking centre_id date` for `centre_load` and `demand-forecast`
+- `queue size` `Slot occupancy` `QueueEvent` for `anomalies`
+
+## Synthetic Training Data (Development Only)
+- **Waiting model:** 800 rows `seed 42` `farmers 0-20, avg 3-4, counters 2-4, qty 5-30, hour 9-14, load 0.1-0.9` `target = calculate_wait + qty*0.1 + load*2 + hour + noise` `R2 0.79` — **NOT historical government procurement data** — marked `trained_on: synthetic demo data 800 rows (Erode DPC operational ranges)` `model_info` field.
+- **Centre load fallback:** `random.randint(12,35)` only when `historical_counts is None` (no DB history) — clearly marked `model_info fallback rule` + `confidence low` in `demand-forecast`.
+
+## Rule-Based Fallback (Safety)
+All AI calls wrapped `try/except` → `calculate_wait` rule, `occupancy>0.7 HIGH` fallback. Booking never fails due to AI. `GET /ai/predict-wait` returns `used_ai false` `reason Rule-based X min` if `farmers_ahead<0` or `model not available` or `|pred-rule|>15` blended.
+
+## Additional AI Features (Real Data)
+- **Demand Forecast:** `GET /ai/demand-forecast?centre_id&commodity&days=7` `4-week weekday avg` `hist same weekday past 4 weeks` `avg_hist` `predicted = int(avg_hist)` `confidence medium` else `baseline 18 low` if `avg<5` — from `Booking` `date` `centre_id/commodity` filter, not synthetic.
+- **Anomaly Detection:** `GET /ai/anomalies/{centre_id}` `booking_spike today>avg7*1.8 high, queue>20 high, capacity>90% medium, processing delay >10min medium` from `Booking` `QueueToken` `Slot` `QueueEvent` rule-based, no ML model.
+- **Slot Recommendation:** `GET /ai/slot-recommendation-ai/{centre_id}` pipeline `VALID FILTER (past/full/hours/centre closed)` → `RULE SAFETY (10 rules)` → `AI WAIT` → `LOAD` → `RECOMMENDATION` `eligible` already filtered, `ai_used false→rule_wait`.
 
 ## Dependencies
 Only `numpy` (already present), no `scikit-learn` (17G cache not installed per 6G constraint), no pandas, CPU inference <10ms.
+
+## Honesty
+- Model **NOT** trained on historical government procurement data — synthetic development dataset only.
+- Accuracy `R2 0.79` is on synthetic data, not production.
+- Fallback `baseline 18` and `random 12-35` clearly marked `confidence low` `model_info fallback`.
+- AI never bypasses `full/past/closed` — `eligible` filtered before AI, `ai_used false` → `rule_wait`.
 
 ## Future
 Optional LLM for FAQ only, not account data; keep retrieval deterministic.

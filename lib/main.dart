@@ -5,10 +5,13 @@ import 'core/theme/app_theme.dart';
 import 'core/routing/app_router.dart';
 import 'core/storage/local_storage.dart';
 import 'core/notifications/fcm_service.dart';
+import 'core/config/demo_config.dart';
 import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Production fails fast if misconfigured — never silently use mock
+  DemoConfig.validateProduction();
   await LocalStorage.instance.init();
   try {
     await FCMService.instance.initialize();

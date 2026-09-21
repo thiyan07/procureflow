@@ -31,7 +31,7 @@ class PaymentScreen extends ConsumerWidget {
                     const SizedBox(width:12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                       Text(p.commodity, style: const TextStyle(fontWeight: FontWeight.w700, fontSize:16)),
-                      Text('${p.quantityQuintal} quintal • ₹${p.ratePerQuintal.toStringAsFixed(0)}/quintal', style: const TextStyle(color: Colors.black54, fontSize:12)),
+                      Text('${p.quantityQuintal} quintal • ₹${p.ratePerQuintal.toStringAsFixed(0)}/quintal', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
                     ])),
                     StatusChip(label: p.status.name.toUpperCase(), color: isCompleted? const Color(0xFF2E7D32): const Color(0xFFEF6C00), icon: isCompleted? Icons.check_circle: Icons.hourglass_top),
                   ]),
@@ -80,8 +80,8 @@ class _PayStep extends StatelessWidget{
       Icon(icon, color: color, size:20),
       const SizedBox(width:10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-        Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize:12, color: done||current? Colors.black87: Colors.black45)),
-        Text(subtitle, style: const TextStyle(fontSize:11, color: Colors.black54)),
+        Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize:12, color: done||current? Theme.of(context).colorScheme.onSurface: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(subtitle, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ])),
       if (current) Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(20)), child: const Text('CURRENT', style: TextStyle(fontSize:9, fontWeight: FontWeight.w700, color: Color(0xFFEF6C00)))),
     ]));
@@ -91,7 +91,7 @@ class _Row extends StatelessWidget{
   final String label; final String value;
   const _Row({required this.label, required this.value});
   @override
-  Widget build(BuildContext context)=> Row(children:[SizedBox(width:120, child: Text(label, style: const TextStyle(color: Colors.black54, fontSize:12))), Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize:13)))]);
+  Widget build(BuildContext context)=> Row(children:[SizedBox(width:120, child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12))), Expanded(child: Text(value, style: TextStyle(fontWeight: FontWeight.w600, fontSize:13)))]);
 }
 final _activeBookingProvider = FutureProvider<Booking?>((ref) async {
   final auth = await ref.read(authRepositoryProvider).getCurrentUser();

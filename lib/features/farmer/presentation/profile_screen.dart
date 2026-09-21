@@ -22,8 +22,8 @@ class ProfileScreen extends ConsumerWidget {
               const SizedBox(width:12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
                 Text(f?.fullName ?? user.mobile, style: const TextStyle(fontWeight: FontWeight.w700, fontSize:16)),
-                Text(f?.farmerId ?? user.role, style: const TextStyle(color: Colors.black54, fontSize:12)),
-                Text(user.mobile, style: const TextStyle(color: Colors.black54, fontSize:12)),
+                Text(f?.farmerId ?? user.role, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
+                Text(user.mobile, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
               ])),
             ])),
             const SizedBox(height:12),
@@ -52,4 +52,4 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 }
-class _Row extends StatelessWidget{ final String label; final String value; const _Row({required this.label, required this.value}); @override Widget build(BuildContext context)=> Row(children:[SizedBox(width:100, child: Text(label, style: const TextStyle(color: Colors.black54, fontSize:12))), Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600)))]); }
+class _Row extends StatelessWidget{ final String label; final String value; const _Row({required this.label, required this.value}); @override Widget build(BuildContext context)=> Row(children:[SizedBox(width:100, child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12))), Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600)))]); }

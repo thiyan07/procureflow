@@ -10,6 +10,7 @@ class Farmer(Base):
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     mobile: Mapped[str] = mapped_column(String(15), nullable=False)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     farmer_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     village: Mapped[str] = mapped_column(String(100), nullable=False)
     district: Mapped[str] = mapped_column(String(100), nullable=False)

@@ -14,6 +14,7 @@ class User(Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     mobile: Mapped[str] = mapped_column(String(15), unique=True, index=True, nullable=False)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     role: Mapped[str] = mapped_column(String(20), default=UserRole.FARMER.value, nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

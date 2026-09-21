@@ -56,8 +56,9 @@ class ApiSlotRepository implements SlotRepository {
   }
 
   Booking _mapBooking(Map<String, dynamic> j) {
-    final slotStart = j['slot_start'] != null ? DateTime.parse('2026-01-01T${j['slot_start']}') : DateTime.now();
-    final slotEnd = j['slot_end'] != null ? DateTime.parse('2026-01-01T${j['slot_end']}') : DateTime.now().add(const Duration(minutes: 30));
+    final dateStr = j['date'] as String? ?? DateTime.now().toIso8601String().split('T').first;
+    final slotStart = j['slot_start'] != null ? DateTime.parse('${dateStr}T${j['slot_start']}') : (j['slotStart'] != null ? DateTime.parse(j['slotStart'] as String) : DateTime.now());
+    final slotEnd = j['slot_end'] != null ? DateTime.parse('${dateStr}T${j['slot_end']}') : (j['slotEnd'] != null ? DateTime.parse(j['slotEnd'] as String) : DateTime.now().add(const Duration(minutes: 30)));
     List<CommodityItem>? commodities;
     if (j['commodities'] is List) {
       commodities = (j['commodities'] as List).map((e)=> CommodityItem.fromJson(e as Map<String,dynamic>)).toList();

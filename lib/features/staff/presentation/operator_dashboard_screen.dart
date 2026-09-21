@@ -99,10 +99,10 @@ class _DashboardBody extends ConsumerWidget {
             return AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               const Text('Peak Period', style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height:4),
-              Text(peakText, style: const TextStyle(color: Colors.black54, fontSize:12)),
+              Text(peakText, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12)),
               const SizedBox(height:8),
               LinearProgressIndicator(value: peakVal.clamp(0,1), color: peakVal>0.7 ? const Color(0xFFEF6C00): const Color(0xFF2E7D32)),
-              if (cap != null) Padding(padding: const EdgeInsets.only(top:4), child: Text('Capacity ${(occ*100).toInt()}% • ${cap['remaining_capacity']} slots left', style: const TextStyle(fontSize:11, color: Colors.black45))),
+              if (cap != null) Padding(padding: const EdgeInsets.only(top:4), child: Text('Capacity ${(occ*100).toInt()}% • ${cap['remaining_capacity']} slots left', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant))),
             ]));
           },
         ),
@@ -114,7 +114,7 @@ class _DashboardBody extends ConsumerWidget {
         AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
           Text('Centre Controls', style: TextStyle(fontWeight: FontWeight.w700)),
           SizedBox(height:8),
-          Text('Adjust counters, capacity, or close centre — affects scheduler safely', style: TextStyle(fontSize:11, color: Colors.black54)),
+          Text('Adjust counters, capacity, or close centre — affects scheduler safely', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
           SizedBox(height:12),
         ])),
         _CentreControlsCard(),
@@ -151,7 +151,7 @@ class _CentreControlsCardState extends ConsumerState<_CentreControlsCard>{
     const SizedBox(height:12),
     SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _saving?null:_save, icon: _saving? const SizedBox(width:14,height:14, child:CircularProgressIndicator(strokeWidth:2)): const Icon(Icons.save), label: const Text('Save Centre Settings'))),
     const SizedBox(height:6),
-    const Text('CLOSED prevents new bookings and explains why; active counters affect wait estimation.', style: TextStyle(fontSize:11, color: Colors.black45)),
+    Text('CLOSED prevents new bookings and explains why; active counters affect wait estimation.', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
   ]);
 }
 
@@ -162,8 +162,8 @@ class _StatCard extends StatelessWidget{
   Widget build(BuildContext context)=> AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
     Container(width:36,height:4, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),
     const SizedBox(height:8),
-    Text(title, style: const TextStyle(fontSize:11, color: Colors.black54)),
+    Text(title, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
     Text(value, style: TextStyle(fontSize:22, fontWeight: FontWeight.w800, color: color)),
-    Text(subtitle, style: const TextStyle(fontSize:11, color: Colors.black45)),
+    Text(subtitle, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
   ]));
 }

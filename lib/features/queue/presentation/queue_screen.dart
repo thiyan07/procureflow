@@ -36,13 +36,13 @@ class QueueScreen extends ConsumerWidget {
                         AppCard(child: Column(children: [
                           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                             _Box(label: 'Current', value: '#${q.currentTokenOrdinal}'),
-                            const Icon(Icons.arrow_forward, color: Colors.black26),
+                            Icon(Icons.arrow_forward, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             _Box(label: 'Your token', value: q.tokenNumber, highlight: true),
                           ]),
                           const SizedBox(height: 12),
                           LinearProgressIndicator(value: q.farmersAhead==0?1: (1 - (q.farmersAhead/15).clamp(0,1)), minHeight: 8, borderRadius: BorderRadius.circular(4)),
                           const SizedBox(height: 8),
-                          Text('${q.farmersAhead} farmers ahead', style: const TextStyle(color: Colors.black54)),
+                          Text('${q.farmersAhead} farmers ahead', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.all(12),
@@ -52,7 +52,7 @@ class QueueScreen extends ConsumerWidget {
                               const SizedBox(width:8),
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 Text('Estimated waiting: ${q.estimatedWaitMinutes} min', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFEF6C00))),
-                                if (pred != null) Text(pred.reasoning, style: const TextStyle(fontSize:11, color: Colors.black54)),
+                                if (pred != null) Text(pred.reasoning, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                               ])),
                               StatusChip(label: q.status.name.toUpperCase(), color: const Color(0xFF2E7D32), icon: Icons.hourglass_top),
                             ]),
@@ -68,7 +68,7 @@ class QueueScreen extends ConsumerWidget {
                           _Step(done: q.status==QueueStatus.processing, title: 'Processing', subtitle: 'Weighment in progress'),
                         ])),
                         const SizedBox(height:12),
-                        const Text('Live updates every 3 seconds (mock). WebSocket-ready architecture.', textAlign: TextAlign.center, style: TextStyle(fontSize:11, color: Colors.black45)),
+                        Text('Live updates every 3 seconds (mock). WebSocket-ready architecture.', textAlign: TextAlign.center, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ]);
                     },
                   );
@@ -89,7 +89,7 @@ class _Box extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal:18, vertical:12),
     decoration: BoxDecoration(color: highlight? const Color(0xFF1B5E20): Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE0E5DE))),
-    child: Column(children: [Text(label, style: TextStyle(fontSize:11, color: highlight? Colors.white70: Colors.black54)), Text(value, style: TextStyle(fontSize:20, fontWeight: FontWeight.w800, color: highlight? Colors.white: Colors.black87))]),
+    child: Column(children: [Text(label, style: TextStyle(fontSize:11, color: highlight? Colors.white70: Theme.of(context).colorScheme.onSurfaceVariant)), Text(value, style: TextStyle(fontSize:20, fontWeight: FontWeight.w800, color: highlight? Colors.white: Theme.of(context).colorScheme.onSurface))]),
   );
 }
 class _Step extends StatelessWidget {
@@ -99,7 +99,7 @@ class _Step extends StatelessWidget {
   Widget build(BuildContext context)=> Padding(padding: const EdgeInsets.symmetric(vertical:6), child: Row(children:[
     Icon(done? Icons.check_circle: Icons.radio_button_unchecked, color: done? const Color(0xFF2E7D32): Colors.grey, size:20),
     const SizedBox(width:10),
-    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: done? Colors.black87: Colors.black45)), Text(subtitle, style: const TextStyle(fontSize:12, color: Colors.black54))])),
+    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: done? Theme.of(context).colorScheme.onSurface: Theme.of(context).colorScheme.onSurfaceVariant)), Text(subtitle, style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant))])),
   ]));
 }
 

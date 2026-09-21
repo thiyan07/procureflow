@@ -60,7 +60,20 @@ class ApiQueueRepository implements QueueRepository {
 
   @override
   Future<void> callNext(String centreId) async {
-    await _client.post('/api/v1/queue/dev/advance', query: {'centre_id': centreId});
+    // Deprecated dev endpoint removed — advance via per-booking transition.
+    // Find first WAITING booking and transition it to CALLED.
+    final queue = await getCentreQueue(centreId);
+    Map<String, dynamic>? next;
+    for (final m in queue) {
+      if ((m['status'] as String? ?? 'WAITING').toUpperCase() == 'WAITING') {
+        next = m;
+        break;
+      }
+    }
+    if (next == null) throw StateError('No WAITING farmers to call');
+    final bookingId = next['booking_id'] as String? ?? next['id'] as String? ?? '';
+    if (bookingId.isEmpty) throw StateError('Booking id missing');
+    await updateQueueStatus(bookingId, QueueStatus.called);
   }
 
   @override

@@ -13,7 +13,24 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    op.execute(sa.text("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS commodities_json TEXT"))
+    # For existing DBs created with old 001 stub, add column if missing
+    # For fresh DBs, 001 already creates commodities_json via Base.metadata.create_all, so this is no-op
+    bind = op.get_bind()
+    from sqlalchemy import inspect
+    inspector = inspect(bind)
+    try:
+        columns = [c['name'] for c in inspector.get_columns('bookings')]
+        if 'commodities_json' not in columns:
+            op.add_column('bookings', sa.Column('commodities_json', sa.Text(), nullable=True))
+    except Exception:
+        # Fallback for DBs where bookings table doesn't exist yet (should not happen after 001)
+        try:
+            op.add_column('bookings', sa.Column('commodities_json', sa.Text(), nullable=True))
+        except Exception:
+            pass
 
 def downgrade():
-    op.execute(sa.text("ALTER TABLE bookings DROP COLUMN IF EXISTS commodities_json"))
+    try:
+        op.drop_column('bookings', 'commodities_json')
+    except Exception:
+        pass
