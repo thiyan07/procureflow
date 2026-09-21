@@ -13,7 +13,14 @@ Trained on synthetic data derived from operational ranges (Erode DPCs).
 import logging
 import random
 from typing import Optional
-import numpy as np
+
+try:
+    import numpy as np
+    _HAS_NUMPY = True
+except ImportError:
+    np = None  # type: ignore
+    _HAS_NUMPY = False
+    logging.getLogger(__name__).warning("numpy not installed - AI waiting time will fallback to rule-based")
 
 from app.services.scheduling_service import calculate_wait
 
@@ -55,6 +62,10 @@ def _train():
     global _model, _model_trained
     if _model_trained:
         return _model
+    if not _HAS_NUMPY:
+        log.warning("numpy missing - skipping AI training, using rule-based")
+        _model_trained = False
+        return None
     try:
         X, y = _synthetic_data(800)
         # Add bias column
@@ -96,6 +107,16 @@ def predict_waiting_time(
     centre_load: Optional[float] = None,
     current_queue_size: Optional[int] = None,
 ) -> dict:
+    # Fallback if numpy not available
+    if not _HAS_NUMPY:
+        rule_wait = calculate_wait(farmers_ahead, avg_processing, active_counters)
+        return {
+            "predicted_wait": rule_wait,
+            "rule_wait": rule_wait,
+            "used_ai": False,
+            "reason": f"Rule-based {rule_wait} min (numpy not installed)",
+            "model_info": "fallback rule-based (no numpy)",
+        }
     """
     Returns dict with:
     - predicted_wait (int, minutes)
