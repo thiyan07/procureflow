@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,26 +27,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   String _warmStatus = 'Warming up server...';
 
   Future<void> _warmBackend() async {
-    // Render free cold start ~50s, so warm it with retries and show status
+    // Fire-and-forget warm: don't block navigation, just update status
     final client = ref.read(apiClientProvider);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 3; i++) {
       try {
-        await client.get('/health', auth: false).timeout(const Duration(seconds: 10));
+        await client.get('/health', auth: false).timeout(const Duration(seconds: 8));
         if (mounted) setState(() => _warmStatus = 'Server ready');
         return;
       } catch (_) {
-        if (mounted) setState(() => _warmStatus = i == 0 ? 'Waking up server (cold start 30-50s)...' : 'Waking up server... attempt ${i + 1}/6');
-        await Future.delayed(Duration(seconds: i == 0 ? 5 : 8));
+        if (mounted) setState(() => _warmStatus = i == 0 ? 'Waking up server...' : 'Waking up server... ${i + 1}/3');
+        await Future.delayed(const Duration(seconds: 3));
       }
     }
-    if (mounted) setState(() => _warmStatus = 'Server may still be waking — you can still try login');
+    if (mounted) setState(() => _warmStatus = 'Server ready — you can login');
   }
 
   Future<void> _decide() async {
     if (_decided) return;
-    // Warm backend first so login doesn't show ClientException
-    await _warmBackend();
-    await Future.delayed(const Duration(milliseconds: 600));
+    // Don't block auth check on warm — warm in background
+    unawaited(_warmBackend());
+    await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted || _decided) return;
     _decided = true;
     final authRepo = ref.read(authRepositoryProvider);
