@@ -63,8 +63,19 @@ class ApiClient {
     return 'Request failed (${res.statusCode})';
   }
 
+  // Render free cold start ~50s, so use 30s timeout + 1 retry
+  Future<http.Response> _withRetry(Future<http.Response> Function() fn) async {
+    try {
+      return await fn().timeout(const Duration(seconds: 30));
+    } on Exception catch (_) {
+      // retry once after 2s for cold start
+      await Future.delayed(const Duration(seconds: 2));
+      return await fn().timeout(const Duration(seconds: 30));
+    }
+  }
+
   Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query, bool auth = true}) async {
-    final res = await _http.get(_uri(path, query), headers: _headers(auth: auth));
+    final res = await _withRetry(() => _http.get(_uri(path, query), headers: _headers(auth: auth)));
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return {};
       final decoded = jsonDecode(res.body);
@@ -76,7 +87,7 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> post(String path, {Object? body, Map<String, dynamic>? query, bool auth = true}) async {
-    final res = await _http.post(_uri(path, query), headers: _headers(auth: auth), body: body != null ? jsonEncode(body) : null);
+    final res = await _withRetry(() => _http.post(_uri(path, query), headers: _headers(auth: auth), body: body != null ? jsonEncode(body) : null));
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return {};
       final decoded = jsonDecode(res.body);
@@ -87,7 +98,7 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> patch(String path, {Object? body, bool auth = true}) async {
-    final res = await _http.patch(_uri(path), headers: _headers(auth: auth), body: body != null ? jsonEncode(body) : null);
+    final res = await _withRetry(() => _http.patch(_uri(path), headers: _headers(auth: auth), body: body != null ? jsonEncode(body) : null));
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return {};
       final decoded = jsonDecode(res.body);
@@ -98,7 +109,7 @@ class ApiClient {
   }
 
   Future<List<dynamic>> getList(String path, {Map<String, dynamic>? query, bool auth = true}) async {
-    final res = await _http.get(_uri(path, query), headers: _headers(auth: auth));
+    final res = await _withRetry(() => _http.get(_uri(path, query), headers: _headers(auth: auth)));
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return [];
       final decoded = jsonDecode(res.body);

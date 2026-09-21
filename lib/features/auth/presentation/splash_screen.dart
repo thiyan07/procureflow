@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/config/demo_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/providers.dart';
+import '../../../core/network/api_client.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -22,9 +23,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _decide());
   }
 
+  String _warmStatus = 'Warming up server...';
+
+  Future<void> _warmBackend() async {
+    // Render free cold start ~50s, so warm it with retries and show status
+    final client = ref.read(apiClientProvider);
+    for (int i = 0; i < 6; i++) {
+      try {
+        await client.get('/health', auth: false).timeout(const Duration(seconds: 10));
+        if (mounted) setState(() => _warmStatus = 'Server ready');
+        return;
+      } catch (_) {
+        if (mounted) setState(() => _warmStatus = i == 0 ? 'Waking up server (cold start 30-50s)...' : 'Waking up server... attempt ${i + 1}/6');
+        await Future.delayed(Duration(seconds: i == 0 ? 5 : 8));
+      }
+    }
+    if (mounted) setState(() => _warmStatus = 'Server may still be waking — you can still try login');
+  }
+
   Future<void> _decide() async {
     if (_decided) return;
-    await Future.delayed(const Duration(milliseconds: 1400));
+    // Warm backend first so login doesn't show ClientException
+    await _warmBackend();
+    await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted || _decided) return;
     _decided = true;
     final authRepo = ref.read(authRepositoryProvider);
@@ -74,8 +95,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               style: TextStyle(fontSize: 16, color: Colors.white70, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 48),
-            const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
-            const SizedBox(height: 80),
+            SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)),
+            const SizedBox(height: 12),
+            Text(_warmStatus, style: TextStyle(color: Colors.white70, fontSize: 11)),
+            const SizedBox(height: 68),
             if (DemoConfig.isDemoMode)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
