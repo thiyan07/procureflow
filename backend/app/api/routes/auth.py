@@ -3,7 +3,8 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.schemas.auth import SendOtpRequest, VerifyOtpRequest, TokenResponse, RefreshRequest, MobileLoginRequest, RegisterRequest
-from app.services.otp_service import get_otp_provider
+# OTP service deprecated - kept for backward compat import but not used (phone+password only)
+# from app.services.otp_service import get_otp_provider
 from app.models.user import User, UserRole
 from app.models.farmer import Farmer
 from app.core.security import create_access_token, create_refresh_token, decode_token, get_password_hash, verify_password
@@ -37,40 +38,76 @@ def _is_strong_password(pwd: str, mobile: str | None = None) -> tuple[bool, str]
         return False, "Password too common, choose a stronger one"
     return True, ""
 
-def _check_rate_limit(key: str) -> None:
+def _check_rate_limit(key: str, db: Session | None = None) -> None:
+    # Prefer DB persistence so survives restart (PostgreSQL)
+    if db is not None:
+        try:
+            from app.models.auth_security import LoginAttempt
+            from datetime import datetime, timezone, timedelta
+            now = datetime.now(timezone.utc)
+            rec = db.get(LoginAttempt, key)
+            if rec:
+                # prune if window passed
+                age = (now - rec.last_attempt_at).total_seconds() if rec.last_attempt_at else 9999
+                if age > _LOCKOUT_WINDOW_SECONDS:
+                    rec.attempts = 0
+                    rec.first_attempt_at = now
+                    db.commit()
+                elif rec.attempts >= _LOCKOUT_THRESHOLD:
+                    raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": "Too many failed attempts. Try again in 15 minutes."})
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     now = time.time()
     attempts = _login_attempts[key]
-    # prune old
     _login_attempts[key] = [t for t in attempts if now - t < _LOCKOUT_WINDOW_SECONDS]
     if len(_login_attempts[key]) >= _LOCKOUT_THRESHOLD:
         raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": "Too many failed attempts. Try again in 15 minutes."})
 
-def _record_failed_attempt(key: str) -> None:
+def _record_failed_attempt(key: str, db: Session | None = None) -> None:
+    if db is not None:
+        try:
+            from app.models.auth_security import LoginAttempt
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            rec = db.get(LoginAttempt, key)
+            if not rec:
+                rec = LoginAttempt(key=key, attempts=1, first_attempt_at=now, last_attempt_at=now)
+                db.add(rec)
+            else:
+                # check window
+                age = (now - rec.first_attempt_at).total_seconds() if rec.first_attempt_at else 0
+                if age > _LOCKOUT_WINDOW_SECONDS:
+                    rec.attempts = 1
+                    rec.first_attempt_at = now
+                else:
+                    rec.attempts += 1
+                rec.last_attempt_at = now
+            db.commit()
+            return
+        except Exception:
+            pass
     _login_attempts[key].append(time.time())
 
-def _clear_attempts(key: str) -> None:
+def _clear_attempts(key: str, db: Session | None = None) -> None:
+    if db is not None:
+        try:
+            from app.models.auth_security import LoginAttempt
+            rec = db.get(LoginAttempt, key)
+            if rec:
+                db.delete(rec)
+                db.commit()
+        except Exception:
+            pass
     _login_attempts.pop(key, None)
 
-@router.post("/send-otp")
+@router.post("/send-otp", deprecated=True)
 def send_otp(payload: SendOtpRequest):
-    # OTP preserved for legacy but not primary - phone+password is primary per security hardening phase
-    identifier = payload.get_identifier()
-    provider = get_otp_provider()
-    try:
-        provider.send_otp(identifier)
-    except RuntimeError as e:
-        msg = str(e)
-        # Rate limit -> 429, others -> 400
-        if "Too many" in msg:
-            raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": msg})
-        # No email found for mobile etc -> 400 not 500
-        raise HTTPException(status_code=400, detail={"code": "OTP_SEND_FAILED", "message": msg})
-    except Exception as e:
-        raise HTTPException(status_code=400, detail={"code": "OTP_SEND_FAILED", "message": str(e)})
-    # Return which identifier was used (don't expose OTP)
-    if payload.email:
-        return {"message": "OTP sent", "email": payload.email}
-    return {"message": "OTP sent", "mobile": payload.mobile}
+    # DEPRECATED: OTP authentication removed - phone+password + JWT is the only auth (see CRITICAL AUTH REQUIREMENT)
+    # Kept as 410 to avoid breaking old clients silently; email remains optional profile field only.
+    raise HTTPException(status_code=410, detail={"code": "DEPRECATED", "message": "OTP authentication deprecated. Use POST /auth/login with phone number and password. Email remains optional profile field."})
 
 @router.post("/register", response_model=TokenResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
@@ -120,10 +157,10 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(payload: MobileLoginRequest, db: Session = Depends(get_db)):
     mobile = payload.mobile.strip()
-    _check_rate_limit(mobile)
+    _check_rate_limit(mobile, db)
     user = db.query(User).filter(User.mobile == mobile).first()
     if not user or not user.hashed_password:
-        _record_failed_attempt(mobile)
+        _record_failed_attempt(mobile, db)
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid mobile or password"})
     # Primary check
     password_ok = False
@@ -139,7 +176,7 @@ def login(payload: MobileLoginRequest, db: Session = Depends(get_db)):
             if mobile in demo_mobiles:
                 password_ok = True
     if not password_ok:
-        _record_failed_attempt(mobile)
+        _record_failed_attempt(mobile, db)
         # audit log failed login
         try:
             from app.services.audit_service import audit
@@ -148,7 +185,7 @@ def login(payload: MobileLoginRequest, db: Session = Depends(get_db)):
         except Exception:
             pass
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid mobile or password"})
-    _clear_attempts(mobile)
+    _clear_attempts(mobile, db)
     access = create_access_token(user.id, user.role)
     refresh = create_refresh_token(user.id, user.role)
     try:
@@ -159,42 +196,10 @@ def login(payload: MobileLoginRequest, db: Session = Depends(get_db)):
         pass
     return TokenResponse(access_token=access, refresh_token=refresh, role=user.role, user_id=user.id)
 
-@router.post("/verify-otp", response_model=TokenResponse)
+@router.post("/verify-otp", deprecated=True)
 def verify_otp(payload: VerifyOtpRequest, db: Session = Depends(get_db)):
-    identifier = payload.get_identifier()
-    provider = get_otp_provider()
-    if not provider.verify_otp(identifier, payload.otp):
-        raise HTTPException(status_code=400, detail={"code": "INVALID_OTP", "message": "Invalid or expired OTP"})
-    # Lookup by email or mobile
-    user = None
-    if payload.email:
-        user = db.query(User).filter(User.email == payload.email.strip().lower()).first()
-        if not user and payload.mobile:
-            user = db.query(User).filter(User.mobile == payload.mobile).first()
-    else:
-        user = db.query(User).filter(User.mobile == payload.mobile).first()
-        # Also try email if User has email matching mobile's email (for Brevo flow where mobile was used to lookup email)
-        if not user and "@" in identifier:
-            user = db.query(User).filter(User.email == identifier.lower()).first()
-    if not user:
-        # Create new user — prefer email if provided, else mobile
-        email = payload.email.strip().lower() if payload.email else None
-        mobile = payload.mobile.strip() if payload.mobile else (f"email_{identifier}" if email else identifier)
-        # Ensure mobile is unique — generate placeholder if email only
-        if not mobile or "@" in mobile:
-            mobile = f"999{str(uuid.uuid4().int)[:7]}"
-        user = User(id=str(uuid.uuid4()), mobile=mobile, email=email, role=UserRole.FARMER.value)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        # If user exists but email provided and not set, update
-        if payload.email and not user.email:
-            user.email = payload.email.strip().lower()
-            db.commit()
-    access = create_access_token(user.id, user.role)
-    refresh = create_refresh_token(user.id, user.role)
-    return TokenResponse(access_token=access, refresh_token=refresh, role=user.role, user_id=user.id)
+    # DEPRECATED: OTP authentication removed - phone+password + JWT is the only auth
+    raise HTTPException(status_code=410, detail={"code": "DEPRECATED", "message": "OTP authentication deprecated. Use POST /auth/login with phone number and password."})
 
 @router.post("/refresh", response_model=TokenResponse)
 def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
@@ -218,21 +223,28 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
     return TokenResponse(access_token=access, refresh_token=refresh_tok, role=user.role, user_id=user.id)
 
 @router.post("/logout")
-def logout(user: User = Depends(get_current_user), credentials: HTTPAuthorizationCredentials = Depends(security)):
-    # revoke current access token + optionally refresh via body (if supplied)
+def logout(user: User = Depends(get_current_user), credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     from app.api.deps import revoke_token
     token = credentials.credentials
     try:
         payload = decode_token(token)
         jti = payload.get("jti")
+        exp = payload.get("exp")
+        expires_at = None
+        if exp:
+            try:
+                from datetime import datetime, timezone
+                expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+            except Exception:
+                expires_at = None
         if jti:
-            revoke_token(jti)
+            revoke_token(jti, db, expires_at)
     except Exception:
         pass
     try:
         from app.services.audit_service import audit
-        from app.db.session import get_db as _get_db
-        # audit is best-effort (no db session here if we don't have it)
+        audit(db, user.id, "logout", "user", user.id, "revoked token")
+        db.commit()
     except Exception:
         pass
     return {"message": "Logged out"}

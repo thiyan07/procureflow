@@ -78,11 +78,11 @@ class MockDatabase {
   final Map<String, String> procurementApprovalStatus = {}; // NONE, PENDING, OPERATOR_APPROVED, ADMIN_APPROVED
   final Map<String, String> procurementPendingStage = {}; // e.g. COMPLETED
 
-  // Stored passwords for mock mobile+password login (mobile -> password)
-  // Demo defaults: farmer 9876543210 / password123 , operator 9876543211 / operator123
+  // Stored passwords for mock mobile+password login (mobile -> password) - phone+password only
+  // Demo defaults: farmer 9876543210 / password123 , operator 9876543211 / password123 (unified per hardening)
   final Map<String, String> farmerPasswords = {
     '9876543210': 'password123',
-    '9876543211': 'operator123',
+    '9876543211': 'password123',
   };
   // Optional email mapping (email -> mobile) for Brevo flow
   final Map<String, String> emailToMobile = {

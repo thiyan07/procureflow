@@ -17,5 +17,6 @@ try:
     import app.models.procurement  # noqa: F401
     import app.models.payment  # noqa: F401
     import app.models.feedback  # noqa: F401
+    import app.models.auth_security  # noqa: F401 revoked_tokens, login_attempts persistence
 except Exception:
     pass

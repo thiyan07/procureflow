@@ -25,29 +25,17 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendOtp(String mobile) async {
-    await Future.delayed(AppConstants.mockDelay);
-    // mock - always succeeds, OTP is 123456
+    throw Exception('OTP authentication deprecated. Use phone number + password.');
   }
 
   @override
   Future<void> sendOtpToEmail(String email) async {
-    await Future.delayed(AppConstants.mockDelay);
-    // mock email OTP - always succeeds, OTP is 123456
+    throw Exception('OTP authentication deprecated. Use phone number + password.');
   }
 
   @override
   Future<AppUser> loginWithMobileAndOtp(String mobile, String otp) async {
-    await Future.delayed(AppConstants.mockDelay);
-    if (otp != AppConstants.demoOtp) throw Exception('Invalid OTP. Use 123456 for demo');
-    final role = mobile == AppConstants.demoOperatorMobile ? 'CENTRE_OPERATOR' : 'FARMER';
-    final farmer = role == 'FARMER' ? _db.demoFarmer.copyWith() : null;
-    final farmerWithMobile = farmer != null && mobile != farmer.mobile
-        ? farmer.copyWith()
-        : farmer;
-    final user = AppUser(id: mobile == AppConstants.demoOperatorMobile ? 'op1' : _db.demoFarmer.id, mobile: mobile, role: role, farmer: farmerWithMobile);
-    await LocalStorage.instance.saveAuth('mock_token_$mobile', UserRoleX.fromString(role), jsonEncode(user.toJson()));
-    if (role == 'FARMER') _db.createDemoBookingIfMissing();
-    return user;
+    throw Exception('OTP authentication deprecated. Use loginWithMobileAndPassword with phone + password.');
   }
 
   @override
@@ -102,14 +90,7 @@ class MockAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> loginWithEmailAndOtp(String email, String otp) async {
-    await Future.delayed(AppConstants.mockDelay);
-    if (otp != AppConstants.demoOtp) throw Exception('Invalid OTP. Use 123456 for demo');
-    final role = email.contains('operator') ? 'CENTRE_OPERATOR' : 'FARMER';
-    final farmer = role == 'FARMER' ? _db.demoFarmer.copyWith() : null;
-    final user = AppUser(id: email.hashCode.toString(), mobile: email, role: role, farmer: farmer);
-    await LocalStorage.instance.saveAuth('mock_token_$email', UserRoleX.fromString(role), jsonEncode(user.toJson()));
-    if (role == 'FARMER') _db.createDemoBookingIfMissing();
-    return user;
+    throw Exception('OTP authentication deprecated. Use phone number + password.');
   }
 
   @override

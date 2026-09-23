@@ -1,3 +1,9 @@
+databases:
+  - name: procureflow-db
+    plan: free
+    databaseName: procureflow
+    user: procureflow
+
 services:
   - type: web
     name: procureflow-api
@@ -10,7 +16,9 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        value: sqlite:////tmp/procureflow.db
+        fromDatabase:
+          name: procureflow-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: ENVIRONMENT
@@ -19,3 +27,9 @@ services:
         value: https://procureflow.app,http://localhost:3000
       - key: PYTHONPATH
         value: .
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: FCM_CLIENT_EMAIL
+        sync: false
+      - key: FCM_PRIVATE_KEY
+        sync: false

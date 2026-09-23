@@ -7,14 +7,37 @@ from app.models.user import User
 
 security = HTTPBearer()
 
-# In-memory revoked jti set for logout (single-instance; for multi-instance use Redis/DB)
+# In-memory fallback for dev (when DB not available) - kept for low-cost deploy
 _revoked_jti: set[str] = set()
 
-def revoke_token(jti: str) -> None:
+def revoke_token(jti: str, db: Session | None = None, expires_at=None) -> None:
     _revoked_jti.add(jti)
+    if db is not None:
+        try:
+            from app.models.auth_security import RevokedToken
+            from datetime import datetime, timezone
+            # Persist to PostgreSQL so survives restart
+            existing = db.get(RevokedToken, jti)
+            if not existing:
+                rt = RevokedToken(jti=jti, expires_at=expires_at)
+                db.add(rt)
+                db.commit()
+        except Exception:
+            pass  # fallback to memory
 
-def is_revoked(jti: str) -> bool:
-    return jti in _revoked_jti
+def is_revoked(jti: str, db: Session | None = None) -> bool:
+    if jti in _revoked_jti:
+        return True
+    if db is not None:
+        try:
+            from app.models.auth_security import RevokedToken
+            existing = db.get(RevokedToken, jti)
+            if existing:
+                _revoked_jti.add(jti)
+                return True
+        except Exception:
+            pass
+    return False
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)) -> User:
     token = credentials.credentials
@@ -25,7 +48,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     if payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "INVALID_TOKEN", "message": "Invalid token type"})
     jti = payload.get("jti")
-    if jti and is_revoked(jti):
+    if jti and is_revoked(jti, db):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "TOKEN_REVOKED", "message": "Token has been revoked. Please login again."})
     user_id = payload.get("sub")
     user = db.get(User, user_id)

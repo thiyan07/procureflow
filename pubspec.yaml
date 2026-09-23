@@ -23,9 +23,9 @@ dependencies:
   http: ^1.2.2
   share_plus: ^10.1.4
   path_provider: ^2.1.5
-  # Firebase messaging - enable when configuring FCM (see backend/backend README)
-  # firebase_core: ^2.24.0
-  # firebase_messaging: ^14.7.0
+  firebase_core: ^2.24.0
+  firebase_messaging: ^14.7.0
+  flutter_local_notifications: ^16.3.0
 
 dev_dependencies:
   flutter_test:

@@ -10,19 +10,19 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
 
-    otp_provider: str = "mock"  # mock | production (twilio) | brevo
+    # DEPRECATED OTP - kept for backward compat only, not used for auth (phone+password+JWT is the only auth)
+    # Will be removed in future; production no longer requires OTP config
+    otp_provider: str = "deprecated"  # deprecated - OTP removed, kept for compat
     otp_fixed_code: str = "123456"
     otp_expiry_minutes: int = 5
     otp_max_attempts: int = 3
-    # Production OTP (Twilio) — set via env, fail safe if missing
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_from_number: str = ""
-    # Brevo Email OTP — primary for production
-    brevo_api_key: str = ""
+    twilio_account_sid: str = ""  # deprecated
+    twilio_auth_token: str = ""  # deprecated
+    twilio_from_number: str = ""  # deprecated
+    brevo_api_key: str = ""  # email remains optional profile field, not auth
     email_from: str = "noreply@procureflow.in"
     email_from_name: str = "ProcureFlow"
-    email_provider: str = "mock"  # mock | brevo | brevo_mock (dev fallback)
+    email_provider: str = "mock"  # deprecated for auth
 
     fcm_project_id: str = ""
     fcm_client_email: str = ""
@@ -57,10 +57,7 @@ class Settings(BaseSettings):
                 errors.append("DATABASE_URL must be PostgreSQL in production, not SQLite")
             if self.jwt_secret == "change-me-dev-secret-at-least-32-chars-long":
                 errors.append("JWT_SECRET must be set to a strong random value in production")
-            if self.otp_provider.lower() == "mock":
-                errors.append("OTP_PROVIDER must be 'production' in production, not 'mock'")
-            if self.otp_provider.lower() == "production" and not (self.twilio_account_sid and self.twilio_auth_token and self.twilio_from_number):
-                errors.append("TWILIO_* credentials must be set when OTP_PROVIDER=production")
+            # OTP deprecated - no longer required for production (phone+password only)
             if not self.fcm_project_id or not self.fcm_client_email or not self.fcm_private_key:
                 # FCM is optional but should not silently mock in prod — warn
                 import logging

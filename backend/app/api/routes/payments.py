@@ -30,14 +30,32 @@ def update_status(booking_id: str, payload: PaymentStatusUpdate, db: Session = D
     pay = db.query(Payment).filter(Payment.booking_id == booking_id).first()
     if not pay:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Payment not found"})
-    # normalize PAID/COMPLETED aliases
+    # strict state machine
+    valid = [s.value for s in PaymentStatus]
+    if payload.status not in valid:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_STATUS", "message": "Invalid payment status"})
+    # normalize PAID alias to COMPLETED for storage
     status_norm = payload.status
     if status_norm == PaymentStatus.PAID.value:
         status_norm = PaymentStatus.COMPLETED.value
-    if status_norm not in [s.value for s in PaymentStatus]:
-        raise HTTPException(status_code=400, detail={"code": "INVALID_STATUS", "message": "Invalid payment status"})
-    # enforce lifecycle: allow any forward transition, but log
-    # PENDING->CALCULATED->APPROVED->PROCESSING->COMPLETED/PAID, FAILED/REVERSED allowed from any
+    # also normalize COMPLETED alias for PAID if needed
+    # Define allowed transitions (strict)
+    allowed_transitions = {
+        PaymentStatus.PENDING.value: [PaymentStatus.CALCULATED.value, PaymentStatus.APPROVED.value, PaymentStatus.PROCESSING.value, PaymentStatus.FAILED.value],
+        PaymentStatus.CALCULATED.value: [PaymentStatus.APPROVED.value, PaymentStatus.FAILED.value],
+        PaymentStatus.APPROVED.value: [PaymentStatus.PROCESSING.value, PaymentStatus.FAILED.value],
+        PaymentStatus.PROCESSING.value: [PaymentStatus.COMPLETED.value, PaymentStatus.PAID.value, PaymentStatus.FAILED.value, PaymentStatus.REVERSED.value],
+        PaymentStatus.COMPLETED.value: [PaymentStatus.REVERSED.value],
+        PaymentStatus.PAID.value: [PaymentStatus.REVERSED.value],
+        PaymentStatus.FAILED.value: [PaymentStatus.PENDING.value, PaymentStatus.CALCULATED.value],
+        PaymentStatus.REVERSED.value: [],
+        PaymentStatus.ON_HOLD.value: [PaymentStatus.PENDING.value, PaymentStatus.FAILED.value],
+    }
+    current = pay.status
+    if status_norm != current:
+        allowed = allowed_transitions.get(current, [])
+        if status_norm not in allowed:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_TRANSITION", "message": f"Invalid payment transition {current} -> {status_norm}. Allowed: {allowed}"})
     pay.status = status_norm
     # fill financials if not set
     if pay.gross_amount is None:

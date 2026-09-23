@@ -8,14 +8,31 @@ import 'core/notifications/fcm_service.dart';
 import 'core/config/demo_config.dart';
 import 'services/providers.dart';
 import 'l10n/app_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Production fails fast if misconfigured — never silently use mock
   DemoConfig.validateProduction();
   await LocalStorage.instance.init();
+  // Firebase must be initialized before FCM
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (_) {
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    } catch (_) {}
+  }
   try {
     await FCMService.instance.initialize();
+  } catch (_) {}
+  // Wire router for notification tap deep-links
+  try {
+    FCMService.setRouter(AppRouter.router);
   } catch (_) {}
   runApp(const ProviderScope(child: ProcureFlowApp()));
 }

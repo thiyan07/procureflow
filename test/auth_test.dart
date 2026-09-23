@@ -16,26 +16,29 @@ void main() {
       repo = MockAuthRepository();
     });
 
-    test('sendOtp succeeds with valid mobile', () async {
-      await repo.sendOtp('9876543210');
+    test('sendOtp is deprecated - phone+password only', () async {
+      expect(
+        () => repo.sendOtp('9876543210'),
+        throwsException,
+      );
     });
 
-    test('loginWithMobileAndOtp validates demo OTP 123456', () async {
-      final user = await repo.loginWithMobileAndOtp(AppConstants.demoFarmerMobile, '123456');
+    test('loginWithMobileAndPassword validates demo password', () async {
+      final user = await repo.loginWithMobileAndPassword(AppConstants.demoFarmerMobile, 'password123');
       expect(user.mobile, AppConstants.demoFarmerMobile);
       expect(user.role, 'FARMER');
       expect(user.farmer, isNotNull);
     });
 
-    test('login fails with wrong OTP', () async {
+    test('login fails with wrong password', () async {
       expect(
-        () => repo.loginWithMobileAndOtp(AppConstants.demoFarmerMobile, '000000'),
+        () => repo.loginWithMobileAndPassword(AppConstants.demoFarmerMobile, 'wrongpass'),
         throwsException,
       );
     });
 
-    test('operator login via demo operator mobile', () async {
-      final user = await repo.loginWithMobileAndOtp(AppConstants.demoOperatorMobile, '123456');
+    test('operator login via demo operator mobile with password', () async {
+      final user = await repo.loginWithMobileAndPassword(AppConstants.demoOperatorMobile, 'password123');
       expect(user.role, 'CENTRE_OPERATOR');
       expect(user.farmer, isNull);
     });
@@ -44,7 +47,7 @@ void main() {
       final user = await repo.registerFarmer(
         fullName: 'Test Farmer',
         mobile: '9999999999',
-        password: 'test123',
+        password: 'TestPass123',
         email: 'testfarmer@procureflow.in',
         farmerId: 'FARM-TEST-001',
         village: 'TestVillage',
@@ -60,7 +63,7 @@ void main() {
     });
 
     test('logout clears session', () async {
-      await repo.loginWithMobileAndOtp(AppConstants.demoFarmerMobile, '123456');
+      await repo.loginWithMobileAndPassword(AppConstants.demoFarmerMobile, 'password123');
       expect(await repo.getCurrentUser(), isNotNull);
       await repo.logout();
       expect(await repo.getCurrentUser(), isNull);

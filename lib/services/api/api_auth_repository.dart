@@ -35,47 +35,17 @@ class ApiAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendOtp(String mobile) async {
-    await _client.post('/api/v1/auth/send-otp', body: {'mobile': mobile}, auth: false);
+    throw Exception('OTP authentication deprecated. Use phone number + password. POST /api/v1/auth/login');
   }
 
   @override
   Future<void> sendOtpToEmail(String email) async {
-    await _client.post('/api/v1/auth/send-otp', body: {'email': email}, auth: false);
+    throw Exception('OTP authentication deprecated. Use phone number + password. POST /api/v1/auth/login');
   }
 
   @override
   Future<AppUser> loginWithMobileAndOtp(String mobile, String otp) async {
-    final res = await _client.post('/api/v1/auth/verify-otp', body: {'mobile': mobile, 'otp': otp}, auth: false);
-    final access = res['access_token'] as String;
-    final role = res['role'] as String? ?? 'FARMER';
-    final userId = res['user_id'] as String? ?? mobile;
-    await LocalStorage.instance.saveAuth(access, UserRoleX.fromString(role), jsonEncode(AppUser(id: userId, mobile: mobile, role: role, farmer: null).toJson()));
-    if (res['refresh_token'] != null) {
-      await LocalStorage.instance.setString('refresh_token', res['refresh_token'] as String);
-    }
-    AppUser user;
-    try {
-      final me = await _client.get('/api/v1/auth/me');
-      final farmerJson = me['farmer'];
-      Farmer? farmer;
-      if (farmerJson != null) {
-        farmer = Farmer.fromJson({
-          'id': farmerJson['id'],
-          'fullName': farmerJson['full_name'] ?? farmerJson['fullName'],
-          'mobile': farmerJson['mobile'],
-          'farmerId': farmerJson['farmer_id'] ?? farmerJson['farmerId'],
-          'village': farmerJson['village'],
-          'district': farmerJson['district'],
-          'languageCode': farmerJson['language_code'] ?? 'en',
-          'primaryCommodity': farmerJson['primary_commodity'] ?? 'Paddy',
-        });
-      }
-      user = AppUser(id: userId, mobile: mobile, role: role, farmer: farmer);
-    } catch (_) {
-      user = AppUser(id: userId, mobile: mobile, role: role, farmer: null);
-    }
-    await LocalStorage.instance.saveAuth(access, UserRoleX.fromString(role), jsonEncode(user.toJson()));
-    return user;
+    throw Exception('OTP authentication deprecated. Use loginWithMobileAndPassword. POST /api/v1/auth/login');
   }
 
   @override
@@ -134,41 +104,7 @@ class ApiAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> loginWithEmailAndOtp(String email, String otp) async {
-    final res = await _client.post('/api/v1/auth/verify-otp', body: {'email': email, 'otp': otp}, auth: false);
-    final access = res['access_token'] as String;
-    final role = res['role'] as String? ?? 'FARMER';
-    final userId = res['user_id'] as String? ?? email;
-    await LocalStorage.instance.saveAuth(access, UserRoleX.fromString(role), jsonEncode(AppUser(id: userId, mobile: email, role: role, farmer: null).toJson()));
-    if (res['refresh_token'] != null) {
-      await LocalStorage.instance.setString('refresh_token', res['refresh_token'] as String);
-    }
-    AppUser user;
-    try {
-      final me = await _client.get('/api/v1/auth/me');
-      final farmerJson = me['farmer'];
-      Farmer? farmer;
-      if (farmerJson != null) {
-        farmer = Farmer.fromJson({
-          'id': farmerJson['id'],
-          'fullName': farmerJson['full_name'] ?? farmerJson['fullName'],
-          'mobile': farmerJson['mobile'],
-          'farmerId': farmerJson['farmer_id'] ?? farmerJson['farmerId'],
-          'village': farmerJson['village'],
-          'district': farmerJson['district'],
-          'languageCode': farmerJson['language_code'] ?? 'en',
-          'primaryCommodity': farmerJson['primary_commodity'] ?? 'Paddy',
-        });
-      }
-      if (farmer != null && farmer.mobile.isNotEmpty) {
-        user = AppUser(id: userId, mobile: farmer.mobile, role: role, farmer: farmer);
-      } else {
-        user = AppUser(id: userId, mobile: email, role: role, farmer: farmer);
-      }
-    } catch (_) {
-      user = AppUser(id: userId, mobile: email, role: role, farmer: null);
-    }
-    await LocalStorage.instance.saveAuth(access, UserRoleX.fromString(role), jsonEncode(user.toJson()));
-    return user;
+    throw Exception('OTP authentication deprecated. Use phone number + password.');
   }
 
   @override
