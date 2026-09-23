@@ -1,10 +1,24 @@
 import os
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://procureflow:procureflow@localhost:5432/procureflow"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _fix_database_url(cls, v: str) -> str:
+        # Render free DB gives postgres:// or postgresql:// without driver.
+        # SQLAlchemy + psycopg3 needs postgresql+psycopg://
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+psycopg://", 1)
+            elif v.startswith("postgresql://") and "+psycopg" not in v:
+                v = v.replace("postgresql://", "postgresql+psycopg://", 1)
+            # Render internal URL may be postgres://... with query ?sslmode=require
+        return v
     jwt_secret: str = "change-me-dev-secret-at-least-32-chars-long"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30

@@ -28,10 +28,10 @@ class DemoConfig {
   static const bool enableMockAI = true;
   static const bool enableMockNotifications = true;
 
-  /// Production placeholders - to be filled via --dart-define
-  /// Default to localhost:8000 for local dev; override with API_BASE_URL for prod.
-  /// For Android emulator, pass --dart-define=API_BASE_URL=http://10.0.2.2:8000
-  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000');
+  /// Production defaults — online Render URL; override via --dart-define for local dev.
+  /// Local dev: --dart-define=API_BASE_URL=http://127.0.0.1:8000
+  /// Android emulator: --dart-define=API_BASE_URL=http://10.0.2.2:8000
+  static const String apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://procureflow-api.onrender.com');
   static const String apiKey = String.fromEnvironment('API_KEY', defaultValue: '');
 
   static bool get isDemoMode => useMockBackend;
@@ -42,7 +42,7 @@ class DemoConfig {
   /// Production check — fail fast if production is misconfigured
   static void validateProduction() {
     const env = String.fromEnvironment('APP_ENV', defaultValue: 'dev');
-    const apiUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8000');
+    const apiUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://procureflow-api.onrender.com');
     if (env == 'prod') {
       if (useMockBackend) {
         throw StateError('Production must not use Mock backend: set --dart-define=USE_MOCK=false');
@@ -50,9 +50,8 @@ class DemoConfig {
       if (apiUrl.contains('127.0.0.1') || apiUrl.contains('localhost')) {
         throw StateError('Production API_BASE_URL must not be localhost: $apiUrl');
       }
-      if (apiUrl == 'http://127.0.0.1:8000') {
-        throw StateError('Production API_BASE_URL must be set via --dart-define=API_BASE_URL=https://your-api.com');
-      }
+      // kept for backward compat - no longer needed since default is now prod URL
+      // if apiUrl is still localhost, the check above already throws
     }
   }
 

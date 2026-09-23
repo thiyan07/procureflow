@@ -13,13 +13,12 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        // Placeholder - will be overridden by google-services.json at build time
-        // Provide minimal stub to allow compilation without real config; real FCM will init via native google-services.json
         return const FirebaseOptions(
-          apiKey: 'placeholder-api-key',
-          appId: '1:000000000000:android:0000000000000000000000',
-          messagingSenderId: '000000000000',
-          projectId: 'procureflow-pending',
+          apiKey: 'AIzaSyByger6P_iMUcoa1KsUfsqjuExvd7g3kcQ',
+          appId: '1:327626589824:android:e4c9d5e25a7f58e3ac8865',
+          messagingSenderId: '327626589824',
+          projectId: 'procureflow-bf2d3',
+          storageBucket: 'procureflow-bf2d3.firebasestorage.app',
         );
       case TargetPlatform.iOS:
         return const FirebaseOptions(

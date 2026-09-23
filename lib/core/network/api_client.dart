@@ -63,14 +63,21 @@ class ApiClient {
     return 'Request failed (${res.statusCode})';
   }
 
-  // Render free cold start ~50s, so use 30s timeout + 1 retry
+  // Render free cold start ~50s, so use 45s timeout + 1 retry + friendly error
   Future<http.Response> _withRetry(Future<http.Response> Function() fn) async {
     try {
-      return await fn().timeout(const Duration(seconds: 30));
-    } on Exception catch (_) {
-      // retry once after 2s for cold start
-      await Future.delayed(const Duration(seconds: 2));
-      return await fn().timeout(const Duration(seconds: 30));
+      return await fn().timeout(const Duration(seconds: 45));
+    } on Exception catch (e) {
+      // retry once after 2s for cold start; if still fails, convert to HttpException with friendly message
+      try {
+        await Future.delayed(const Duration(seconds: 2));
+        return await fn().timeout(const Duration(seconds: 45));
+      } on Exception catch (e2) {
+        final msg = e2.toString().contains('TimeoutException') || e.toString().contains('TimeoutException')
+            ? 'Server waking up (Render free tier cold start). Please wait 30-60s and retry. If still failing, check https://procureflow-api.onrender.com/health'
+            : 'Network error: $e2';
+        throw HttpException(msg);
+      }
     }
   }
 
