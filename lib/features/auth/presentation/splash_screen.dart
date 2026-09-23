@@ -16,6 +16,9 @@ class SplashScreen extends ConsumerStatefulWidget {
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
   bool _decided = false;
+  bool _disposed = false;
+  Timer? _warmTimer;
+  Completer<void>? _warmCompleter;
 
   @override
   void initState() {
@@ -24,19 +27,40 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _decide());
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    _warmTimer?.cancel();
+    _warmCompleter?.complete();
+    super.dispose();
+  }
+
+  Future<void> _cancellableDelay(Duration d) async {
+    if (_disposed) return;
+    final completer = Completer<void>();
+    _warmCompleter = completer;
+    _warmTimer = Timer(d, () {
+      if (!completer.isCompleted) completer.complete();
+    });
+    await completer.future;
+    _warmTimer = null;
+    _warmCompleter = null;
+  }
+
   String _warmStatus = 'Warming up server...';
 
   Future<void> _warmBackend() async {
     // Fire-and-forget warm: don't block navigation, just update status
     final client = ref.read(apiClientProvider);
     for (int i = 0; i < 3; i++) {
+      if (_disposed) return;
       try {
         await client.get('/health', auth: false).timeout(const Duration(seconds: 8));
         if (mounted) setState(() => _warmStatus = 'Server ready');
         return;
       } catch (_) {
         if (mounted) setState(() => _warmStatus = i == 0 ? 'Waking up server...' : 'Waking up server... ${i + 1}/3');
-        await Future.delayed(const Duration(seconds: 3));
+        await _cancellableDelay(const Duration(seconds: 3));
       }
     }
     if (mounted) setState(() => _warmStatus = 'Server ready — you can login');

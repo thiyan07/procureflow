@@ -11,6 +11,7 @@ import '../../../services/api/api_slot_repository.dart';
 import '../../../services/mock/mock_repositories.dart';
 import '../../../models/slot.dart';
 import '../../../models/booking.dart';
+import '../../../core/offline/offline_sync.dart';
 import '../../../l10n/app_localizations.dart';
 
 class SlotBookingScreen extends ConsumerStatefulWidget {
@@ -91,17 +92,29 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking successful! Token ${booking.tokenNumber}')));
       context.go('/token');
     } catch(e){
-      final friendly = userFriendlyMessage(e);
-      // Special handling for duplicate booking: navigate to token
-      if (e.toString().contains('DUPLICATE_BOOKING')) {
+      final errStr = e.toString();
+      // Offline queue for safe booking only (no payment mutation)
+      if (errStr.contains('SocketException') || errStr.contains('Failed host lookup') || errStr.contains('Connection refused')) {
+        final payload = {'centre_id': _centreId, 'slot_id': _selectedSlotId, 'commodity': primary['commodity'], 'quantity': primary['quantity'], 'commodities': commodities};
+        await OfflineSyncService.queueBooking(payload);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(friendly),
-          action: SnackBarAction(label: 'View Token', onPressed: () => context.go('/token')),
+          content: Text('Offline — booking queued (${OfflineSyncService.pendingCount} pending). Will sync when online.'),
+          action: SnackBarAction(label: 'View Queue', onPressed: () => context.go('/token')),
           duration: const Duration(seconds: 4),
         ));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendly)));
+        final friendly = userFriendlyMessage(e);
+        if (errStr.contains('DUPLICATE_BOOKING')) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(friendly),
+            action: SnackBarAction(label: 'View Token', onPressed: () => context.go('/token')),
+            duration: const Duration(seconds: 4),
+          ));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendly)));
+        }
       }
     } finally{ if(mounted) setState(()=> _booking=false); }
   }

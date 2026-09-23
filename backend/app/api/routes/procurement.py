@@ -289,8 +289,126 @@ def get_receipt(booking_id: str, db: Session = Depends(get_db), user: User = Dep
         "weighment": {"gross": weighment.gross_weight if weighment else None, "net": weighment.net_weight if weighment else None, "time": weighment.weighment_time.isoformat() if weighment and weighment.weighment_time else None} if proc else None,
         "quality": {"grade": quality.grade if quality else None, "moisture": quality.moisture_percent if quality else None, "remarks": quality.remarks if quality else None} if proc else None,
         "procurement": {"stage": proc.stage if proc else None, "booking_id": booking_id},
-        "payment": {"status": payment.status if payment else None, "amount": payment.total_amount if payment else None, "transaction_id": payment.transaction_id if payment else None, "date": payment.payment_date.isoformat() if payment and payment.payment_date else None} if payment else None,
+        "payment": {"status": payment.status if payment else None, "amount": payment.total_amount if payment else None, "gross": payment.gross_amount if payment else None, "deductions": payment.deductions if payment else None, "net": payment.net_payable if payment else None, "transaction_id": payment.transaction_id if payment else None, "reference_id": payment.reference_id if payment else None, "date": payment.payment_date.isoformat() if payment and payment.payment_date else None, "method": payment.payment_method if payment else None} if payment else None,
     }
+
+@router.get("/{booking_id}/receipt/pdf")
+def get_receipt_pdf(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Reuse same auth check as JSON receipt
+    booking = db.get(Booking, booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Booking not found"})
+    farmer = db.query(Farmer).filter(Farmer.user_id == user.id).first()
+    if farmer and booking.farmer_id != farmer.id and user.role not in (UserRole.CENTRE_OPERATOR.value, UserRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "Not authorized"})
+    proc = db.query(Procurement).filter(Procurement.booking_id == booking_id).first()
+    from app.models.payment import Payment
+    payment = db.query(Payment).filter(Payment.booking_id == booking_id).first()
+    weighment = db.query(Weighment).filter(Weighment.procurement_id == proc.id).first() if proc else None
+    quality = db.query(QualityCheck).filter(QualityCheck.procurement_id == proc.id).first() if proc else None
+    centre = db.get(ProcurementCentre, booking.centre_id) if booking else None
+    farmer_obj = db.get(Farmer, booking.farmer_id) if booking else None
+    ref = f"REC-{booking.token_number}-{booking.date.isoformat()}"
+    # Generate PDF with reportlab
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+        import io
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=15*mm, rightMargin=15*mm, topMargin=12*mm, bottomMargin=12*mm, title=f"ProcureFlow Receipt {ref}")
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('title', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1B5E20'), alignment=TA_CENTER, spaceAfter=2*mm)
+        subtitle_style = ParagraphStyle('subtitle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#5A5F5A'), alignment=TA_CENTER, spaceAfter=6*mm)
+        heading_style = ParagraphStyle('heading', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#2E7D32'), spaceAfter=3*mm, spaceBefore=4*mm)
+        normal = styles['Normal']
+        normal.fontSize = 9
+        story = []
+        story.append(Paragraph("PROCUREFLOW", title_style))
+        story.append(Paragraph("TNCSC Procurement Centre Management — Digital Receipt", subtitle_style))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#2E7D32'), spaceAfter=4*mm))
+        # Reference box
+        story.append(Paragraph(f"Receipt: <b>{ref}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Booking: <b>{booking.token_number}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Date: {booking.date}", normal))
+        story.append(Spacer(1, 3*mm))
+        # Farmer / Centre
+        farmer_data = [
+            [Paragraph("<b>Farmer</b>", normal), Paragraph(f"{farmer_obj.full_name if farmer_obj else '-'} ({farmer_obj.farmer_id if farmer_obj else '-'})<br/>{farmer_obj.village if farmer_obj else ''}, {farmer_obj.district if farmer_obj else ''}<br/>Mobile: {farmer_obj.mobile if farmer_obj else booking.farmer_id}", normal)],
+            [Paragraph("<b>Centre</b>", normal), Paragraph(f"{centre.name if centre else '-'}<br/>{centre.location if centre else ''}<br/>Slot: {db.get(Slot, booking.slot_id).start_time if booking.slot_id else '-'} on {booking.date}", normal)],
+        ]
+        t = Table(farmer_data, colWidths=[30*mm, 140*mm])
+        t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E0E5DE')), ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#E8F5E9')), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'), ('LEFTPADDING', (0,0), (-1,-1), 3*mm), ('RIGHTPADDING', (0,0), (-1,-1), 3*mm)]))
+        story.append(t)
+        story.append(Spacer(1, 3*mm))
+        # Commodities
+        story.append(Paragraph("Commodity & Quantity", heading_style))
+        comm_rows = [[Paragraph("<b>Commodity</b>", normal), Paragraph("<b>Quantity (quintal)</b>", normal), Paragraph("<b>Rate (₹/q)</b>", normal), Paragraph("<b>Amount (₹)</b>", normal)]]
+        total_qty = 0
+        total_amt = 0
+        if hasattr(booking, 'commodities') and booking.commodities:
+            for c in booking.commodities:
+                qty = c.get('quantity', 0) if isinstance(c, dict) else getattr(c, 'quantity', 0)
+                comm = c.get('commodity', '') if isinstance(c, dict) else getattr(c, 'commodity', '')
+                rate = payment.rate_per_quintal if payment else 0
+                amt = qty * (rate or 0)
+                total_qty += qty
+                total_amt += amt
+                comm_rows.append([Paragraph(comm, normal), Paragraph(f"{qty}", normal), Paragraph(f"{rate:.0f}" if rate else "-", normal), Paragraph(f"{amt:.0f}", normal)])
+        else:
+            qty = booking.estimated_quantity
+            comm = booking.commodity_name
+            rate = payment.rate_per_quintal if payment else 0
+            amt = payment.total_amount if payment else qty*(rate or 0)
+            total_qty = qty
+            total_amt = amt
+            comm_rows.append([Paragraph(comm, normal), Paragraph(f"{qty}", normal), Paragraph(f"{rate:.0f}" if rate else "-", normal), Paragraph(f"{amt:.0f}", normal)])
+        ct = Table(comm_rows, colWidths=[50*mm, 35*mm, 35*mm, 35*mm])
+        ct.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E0E5DE')), ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#E8F5E9')), ('ALIGN', (1,0), (-1,-1), 'RIGHT'), ('LEFTPADDING', (0,0), (-1,-1), 2*mm)]))
+        story.append(ct)
+        story.append(Spacer(1, 2*mm))
+        # Weighment / Quality
+        story.append(Paragraph("Weighment & Quality", heading_style))
+        w_rows = [
+            [Paragraph("<b>Gross Weight</b>", normal), Paragraph(f"{weighment.gross_weight if weighment and weighment.gross_weight else '-'} q", normal), Paragraph("<b>Net Weight</b>", normal), Paragraph(f"{weighment.net_weight if weighment and weighment.net_weight else '-'} q", normal)],
+            [Paragraph("<b>Grade</b>", normal), Paragraph(f"{quality.grade if quality else '-'}", normal), Paragraph("<b>Moisture</b>", normal), Paragraph(f"{quality.moisture_percent if quality and quality.moisture_percent else '-'} %", normal)],
+            [Paragraph("<b>Quality Remarks</b>", normal), Paragraph(f"{quality.remarks if quality and quality.remarks else '-'}", normal), Paragraph("<b>Procurement Stage</b>", normal), Paragraph(f"{proc.stage if proc else '-'}", normal)],
+        ]
+        wt = Table(w_rows, colWidths=[30*mm, 45*mm, 30*mm, 50*mm])
+        wt.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E0E5DE')), ('LEFTPADDING', (0,0), (-1,-1), 2*mm)]))
+        story.append(wt)
+        story.append(Spacer(1, 3*mm))
+        # Payment
+        story.append(Paragraph("Payment", heading_style))
+        gross = payment.gross_amount if payment and payment.gross_amount else (payment.total_amount if payment else 0)
+        ded = payment.deductions if payment and payment.deductions else 0
+        net = payment.net_payable if payment and payment.net_payable else ((gross or 0) - (ded or 0))
+        status = payment.status if payment else 'PENDING'
+        method = payment.payment_method if payment and payment.payment_method else 'BANK_TRANSFER'
+        txn = payment.transaction_id if payment and payment.transaction_id else '-'
+        refid = payment.reference_id if payment and payment.reference_id else txn
+        p_rows = [
+            [Paragraph("<b>Gross Amount</b>", normal), Paragraph(f"₹ {gross:.0f}" if gross else "₹ -", normal), Paragraph("<b>Deductions</b>", normal), Paragraph(f"₹ {ded:.0f}", normal)],
+            [Paragraph("<b>Net Payable</b>", normal), Paragraph(f"<b>₹ {net:.0f}</b>", normal), Paragraph("<b>Status</b>", normal), Paragraph(f"{status}", normal)],
+            [Paragraph("<b>Method</b>", normal), Paragraph(f"{method}", normal), Paragraph("<b>Transaction</b>", normal), Paragraph(f"{txn}", normal)],
+            [Paragraph("<b>Reference</b>", normal), Paragraph(f"{refid}", normal), Paragraph("<b>Date</b>", normal), Paragraph(f"{payment.payment_date.strftime('%d-%b-%Y %H:%M') if payment and payment.payment_date else '-'}", normal)],
+        ]
+        pt = Table(p_rows, colWidths=[30*mm, 45*mm, 30*mm, 50*mm])
+        pt.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E0E5DE')), ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#FFF3E0')) if status in ('PENDING','PROCESSING') else ('BACKGROUND', (0,0), (0,-1), colors.HexColor('#E8F5E9')) ]))
+        story.append(pt)
+        story.append(Spacer(1, 6*mm))
+        story.append(Paragraph("This is a system-generated digital receipt. No signature required. Rates as per MSP 2026-27. Keep for records.", ParagraphStyle('footer', parent=normal, fontSize=7, textColor=colors.HexColor('#5A5F5A'), alignment=TA_CENTER)))
+        story.append(Paragraph("ProcureFlow • TNCSC • SIH26032 • demo — no real payment gateway", ParagraphStyle('footer2', parent=normal, fontSize=7, textColor=colors.grey, alignment=TA_CENTER)))
+        doc.build(story)
+        pdf_bytes = buffer.getvalue()
+        buffer.close()
+        from fastapi.responses import Response
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{ref}.pdf"'})
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception(f"PDF generation failed: {e}")
+        raise HTTPException(status_code=500, detail={"code": "PDF_FAILED", "message": "Failed to generate PDF receipt"})
 
 # --- P1 Compliance Agent light — deterministic Q&A before approval ---
 @router.post("/{booking_id}/compliance-check", response_model=ComplianceCheckResponse)

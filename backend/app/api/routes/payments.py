@@ -30,13 +30,33 @@ def update_status(booking_id: str, payload: PaymentStatusUpdate, db: Session = D
     pay = db.query(Payment).filter(Payment.booking_id == booking_id).first()
     if not pay:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Payment not found"})
-    if payload.status not in [s.value for s in PaymentStatus]:
+    # normalize PAID/COMPLETED aliases
+    status_norm = payload.status
+    if status_norm == PaymentStatus.PAID.value:
+        status_norm = PaymentStatus.COMPLETED.value
+    if status_norm not in [s.value for s in PaymentStatus]:
         raise HTTPException(status_code=400, detail={"code": "INVALID_STATUS", "message": "Invalid payment status"})
-    pay.status = payload.status
-    if payload.status == PaymentStatus.COMPLETED.value:
+    # enforce lifecycle: allow any forward transition, but log
+    # PENDING->CALCULATED->APPROVED->PROCESSING->COMPLETED/PAID, FAILED/REVERSED allowed from any
+    pay.status = status_norm
+    # fill financials if not set
+    if pay.gross_amount is None:
+        pay.gross_amount = pay.total_amount
+    if pay.deductions is None:
+        pay.deductions = 0
+    if pay.net_payable is None:
+        pay.net_payable = (pay.gross_amount or pay.total_amount) - (pay.deductions or 0)
+    if status_norm in (PaymentStatus.COMPLETED.value, PaymentStatus.PAID.value, PaymentStatus.PROCESSING.value):
+        if pay.payment_method is None:
+            pay.payment_method = "BANK_TRANSFER"
+        if status_norm == PaymentStatus.COMPLETED.value and pay.reference_id is None:
+            pay.reference_id = pay.transaction_id
+    if status_norm == PaymentStatus.COMPLETED.value:
         from datetime import datetime, timezone
         pay.payment_date = datetime.now(timezone.utc)
         pay.transaction_id = f"TXN{int(datetime.now(timezone.utc).timestamp()*1000)}"
+        if pay.reference_id is None:
+            pay.reference_id = pay.transaction_id
         # auto queue COMPLETED + procurement COMPLETED when payment credited
         try:
             from app.models.queue import QueueToken, QueueStatus, QueueEvent

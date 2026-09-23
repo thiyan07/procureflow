@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../services/providers.dart';
@@ -54,7 +57,29 @@ class ReceiptScreen extends ConsumerWidget {
               Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: const Text('This is a digital receipt for demo. No real payment gateway. Keep for records.', style: TextStyle(fontSize:11, color: Color(0xFF1B5E20)))),
             ])),
             const SizedBox(height:12),
-            const Text('Lightweight receipt — no PDF dependency, printable via screenshot.', textAlign: TextAlign.center, style: TextStyle(fontSize:11, color: Colors.black45)),
+            Row(children:[
+              Expanded(child: FilledButton.icon(icon: const Icon(Icons.picture_as_pdf), label: const Text('Download PDF'), onPressed: () async {
+                try{
+                  final bytes = await ref.read(apiClientProvider).getBytes('/api/v1/procurements/$bookingId/receipt/pdf');
+                  final dir = await getTemporaryDirectory();
+                  final file = File('${dir.path}/${data['reference']}.pdf');
+                  await file.writeAsBytes(bytes);
+                  if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF saved ${file.path}')));
+                }catch(e){ if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+              })),
+              const SizedBox(width:8),
+              Expanded(child: FilledButton.icon(icon: const Icon(Icons.share), label: const Text('Share PDF'), onPressed: () async {
+                try{
+                  final bytes = await ref.read(apiClientProvider).getBytes('/api/v1/procurements/$bookingId/receipt/pdf');
+                  final dir = await getTemporaryDirectory();
+                  final file = File('${dir.path}/${data['reference']}.pdf');
+                  await file.writeAsBytes(bytes);
+                  await Share.shareXFiles([XFile(file.path)], text: 'ProcureFlow Receipt ${data['reference']}');
+                }catch(e){ if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+              })),
+            ]),
+            const SizedBox(height:8),
+            const Text('Professional PDF — gross/deductions/net, quality grade, payment status. Printable.', textAlign: TextAlign.center, style: TextStyle(fontSize:11, color: Colors.black45)),
             const SizedBox(height:12),
             FilledButton.icon(icon: const Icon(Icons.share), label: const Text('Share Reference'), onPressed: ()=> ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reference ${data['reference']} copied')))),
           ]);

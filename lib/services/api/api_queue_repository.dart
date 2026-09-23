@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import '../../core/network/api_client.dart';
 import '../../core/constants/app_constants.dart';
 import '../../models/booking.dart';
 import '../repositories.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ApiQueueRepository implements QueueRepository {
   final ApiClient _client;
@@ -36,13 +38,34 @@ class ApiQueueRepository implements QueueRepository {
 
   @override
   Stream<QueueState> watchQueue(String bookingId) async* {
-    // Polling fallback; WebSocket available at /api/v1/queue/ws/{bookingId} but use polling for simplicity
-    while (true) {
-      await Future.delayed(const Duration(seconds: 5));
-      try {
-        yield await getQueueStatus(bookingId);
-      } catch (_) {
-        // ignore and continue
+    // Real-time: try WebSocket, fallback to 5s polling
+    final wsBase = _client.baseUrl.replaceFirst(RegExp(r'^http'), 'ws');
+    final wsUrl = Uri.parse('$wsBase/api/v1/queue/ws/$bookingId');
+    WebSocketChannel? channel;
+    try {
+      channel = WebSocketChannel.connect(wsUrl);
+      // Test connection with timeout
+      await channel.ready.timeout(const Duration(seconds: 3));
+      yield* channel.stream.asyncMap((event) async {
+        // backend broadcasts {"status": "...", "token": "..."} - refresh from REST
+        try {
+          // small delay to let DB commit propagate
+          await Future.delayed(const Duration(milliseconds: 200));
+          return await getQueueStatus(bookingId);
+        } catch (_) {
+          return await getQueueStatus(bookingId);
+        }
+      });
+    } catch (_) {
+      // WS failed - polling fallback
+      if (channel != null) {
+        try { await channel.sink.close(); } catch (_) {}
+      }
+      while (true) {
+        await Future.delayed(const Duration(seconds: 5));
+        try {
+          yield await getQueueStatus(bookingId);
+        } catch (_) {}
       }
     }
   }

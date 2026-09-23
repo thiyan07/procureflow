@@ -119,4 +119,12 @@ class ApiClient {
     }
     throw HttpException(_errorMessage(res));
   }
+
+  Future<List<int>> getBytes(String path, {Map<String, dynamic>? query, bool auth = true}) async {
+    final res = await _withRetry(() => _http.get(_uri(path, query), headers: _headers(auth: auth)));
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return res.bodyBytes;
+    }
+    throw HttpException(_errorMessage(res), uri: _uri(path, query));
+  }
 }
