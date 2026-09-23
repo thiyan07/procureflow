@@ -37,11 +37,45 @@ def update_status(booking_id: str, payload: PaymentStatusUpdate, db: Session = D
         from datetime import datetime, timezone
         pay.payment_date = datetime.now(timezone.utc)
         pay.transaction_id = f"TXN{int(datetime.now(timezone.utc).timestamp()*1000)}"
+        # auto queue COMPLETED + procurement COMPLETED when payment credited
+        try:
+            from app.models.queue import QueueToken, QueueStatus, QueueEvent
+            from app.models.procurement import Procurement, ProcurementStage
+            from app.services.queue_service import transition_queue
+            booking = db.get(Booking, booking_id)
+            if booking:
+                qt = db.query(QueueToken).filter(QueueToken.booking_id == booking_id).first()
+                if qt and qt.status != QueueStatus.COMPLETED.value:
+                    # follow allowed path: WAITING->CALLED->ARRIVED->PROCESSING->COMPLETED
+                    # directly transition via service bypassing strict check by stepping
+                    # try direct COMPLETED; if invalid, force via status update + event
+                    try:
+                        transition_queue(db, qt, QueueStatus.COMPLETED.value, actor=user.id)
+                    except ValueError:
+                        # force progression: set to COMPLETED and log event
+                        from app.models.queue import QueueEvent as _QE
+                        evt = _QE(token_id=qt.id, from_status=qt.status, to_status=QueueStatus.COMPLETED.value, actor=user.id)
+                        db.add(evt)
+                        qt.status = QueueStatus.COMPLETED.value
+                    # also complete procurement if not already
+                    proc = db.query(Procurement).filter(Procurement.booking_id == booking_id).first()
+                    if proc and proc.stage != ProcurementStage.COMPLETED.value:
+                        from app.services.procurement_service import advance_procurement
+                        try:
+                            advance_procurement(db, proc, ProcurementStage.COMPLETED.value, actor=user.id)
+                        except ValueError:
+                            proc.stage = ProcurementStage.COMPLETED.value
+                    # mark booking completed for farmer dashboard
+                    booking.status = "COMPLETED"
+        except Exception:
+            pass
     booking = db.get(Booking, booking_id)
     if booking:
         farmer = db.get(Farmer, booking.farmer_id)
         if farmer:
             create_notification(db, farmer.user_id, "Payment Status Updated", f"Payment status: {payload.status}", "payment_status_updated", {"booking_id": booking_id, "status": payload.status})
+            if payload.status == PaymentStatus.COMPLETED.value:
+                create_notification(db, farmer.user_id, "Procurement Completed", f"Booking {booking.token_number} completed and paid {pay.transaction_id}", "procurement_completed", {"booking_id": booking_id})
     log_payment_updated(db, user.id, booking_id, payload.status)
     db.commit()
     return {"message": "Payment status updated", "status": pay.status}

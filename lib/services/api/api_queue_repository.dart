@@ -89,4 +89,14 @@ class ApiQueueRepository implements QueueRepository {
     };
     await _client.post('/api/v1/queue/$bookingId/transition', body: {'to_status': map[status]});
   }
+
+  @override
+  Future<Map<String, dynamic>> getQueueCorrection(String bookingId) async {
+    try {
+      final res = await _client.get('/api/v1/queue/correction/$bookingId');
+      return res;
+    } catch (_) {
+      return {};
+    }
+  }
 }

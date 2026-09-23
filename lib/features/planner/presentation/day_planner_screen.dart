@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/storage/local_storage.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 import '../../../models/payment.dart';
@@ -49,9 +50,10 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
 
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final bookingAsync = ref.watch(_activeBookingProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('My Procurement Day')),
+      appBar: AppBar(title: Text(loc.myProcurementDay)),
       body: bookingAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e,s) => ErrorState(message: e.toString(), onRetry: ()=> ref.invalidate(_activeBookingProvider)),
@@ -95,18 +97,18 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                   ]),
                   if (centreStatusStr.toLowerCase()!='open') Container(margin: const EdgeInsets.only(top:8), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.warning, color: Colors.red, size:16), const SizedBox(width:6), Expanded(child: Text('Centre $centreStatusStr — may affect booking. See alternative slots.', style: const TextStyle(fontSize:11, color: Colors.red)))])),
                   const SizedBox(height:6),
-                  _Row(label: 'Date', value: AppDateUtils.formatDate(booking.date)),
-                  _Row(label: 'Slot', value: AppDateUtils.formatTime(booking.slotStart)),
-                  _Row(label: 'Commodity', value: booking.commoditiesDisplay),
-                  if (booking.commodities != null && booking.commodities!.length>1) Padding(padding: const EdgeInsets.only(left:90), child: Text('Multi-commodity booking (1 token covers all)', style: const TextStyle(fontSize:10, color: Color(0xFF2E7D32)))),
-                  _Row(label: 'Quantity', value: totalQty),
+                  _Row(label: loc.selectDate, value: AppDateUtils.formatDate(booking.date)),
+                  _Row(label: loc.bookSlot, value: AppDateUtils.formatTime(booking.slotStart)),
+                  _Row(label: loc.selectCommodity, value: booking.commoditiesDisplay),
+                  if (booking.commodities != null && booking.commodities!.length>1) Padding(padding: const EdgeInsets.only(left:90), child: Text(loc.multiCommoditySupported, style: const TextStyle(fontSize:10, color: Color(0xFF2E7D32)))),
+                  _Row(label: loc.estimatedQuantity, value: totalQty),
                   const Divider(height:20),
                   Row(children: [
                     Container(padding: const EdgeInsets.symmetric(horizontal:12, vertical:8), decoration: BoxDecoration(color: const Color(0xFF1B5E20), borderRadius: BorderRadius.circular(10)), child: Column(children: [const Text('TOKEN', style: TextStyle(color: Colors.white70, fontSize:10)), Text(booking.tokenNumber, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize:16)) ])),
                     const SizedBox(width:12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('$farmersAhead farmers ahead', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      Text('Wait ~$wait min • ETA ${AppDateUtils.formatTime(eta)}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      Text(loc.farmersAhead(farmersAhead.toString()), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text('${loc.estimatedWaiting} ${loc.minutes(wait.toString())} • ETA ${AppDateUtils.formatTime(eta)}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       const SizedBox(height:4),
                       LinearProgressIndicator(value: farmersAhead==0?1: 1-(farmersAhead/15).clamp(0,1), minHeight:6, backgroundColor: const Color(0xFFE0E5DE), color: farmersAhead<=2? const Color(0xFFEF6C00): const Color(0xFF2E7D32)),
                       const SizedBox(height:2),
@@ -114,12 +116,12 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                     ])),
                   ]),
                   const SizedBox(height:8),
-                  Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFF1F8E9), borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.lightbulb, color: Color(0xFF2E7D32), size:16), const SizedBox(width:6), Expanded(child: Text('Next: $nextAction', style: const TextStyle(fontSize:11, fontWeight: FontWeight.w600, color: Color(0xFF1B5E20))))])),
+                  Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFF1F8E9), borderRadius: BorderRadius.circular(8)), child: Row(children: [const Icon(Icons.lightbulb, color: Color(0xFF2E7D32), size:16), const SizedBox(width:6), Expanded(child: Text('${loc.nextAction}: $nextAction', style: const TextStyle(fontSize:11, fontWeight: FontWeight.w600, color: Color(0xFF1B5E20))))])),
                 ])),
                 const SizedBox(height:12),
                 // Capacity warnings
                 if ((capacity['warnings'] as List?)?.isNotEmpty == true) AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children:[const Icon(Icons.warning_amber, color: Color(0xFFEF6C00)), const SizedBox(width:6), const Text('Centre Capacity', style: TextStyle(fontWeight: FontWeight.w700, fontSize:12))]),
+                  Row(children:[const Icon(Icons.warning_amber, color: Color(0xFFEF6C00)), const SizedBox(width:6), Text(loc.centreCapacity, style: const TextStyle(fontWeight: FontWeight.w700, fontSize:12))]),
                   const SizedBox(height:6),
                   Text('Total ${capacity['total_capacity']} • Used ${capacity['used_capacity']} • Remaining ${capacity['remaining_capacity']} • Queue ${capacity['current_queue']}', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height:6),
@@ -128,7 +130,7 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                 if ((capacity['warnings'] as List?)?.isNotEmpty == true) const SizedBox(height:12),
                 // Documents checklist with Required/Completed/Missing
                 AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children:[Text('Required Documents', style: TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: Text('Bring originals + photocopy', style: TextStyle(fontSize:9, color: Theme.of(context).colorScheme.onSurfaceVariant)))]),
+                  Row(children:[Text(loc.requiredDocuments, style: const TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal:6,vertical:2), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10)), child: Text(loc.centreDocuments, style: TextStyle(fontSize:9, color: Theme.of(context).colorScheme.onSurfaceVariant)))]),
                   const SizedBox(height:8),
                   ...docsList.map((doc){
                     final key = doc['label'] as String;
@@ -152,7 +154,7 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                 const SizedBox(height:12),
                 // Procurement + Payment
                 if (timeline!=null) AppCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Procurement Progress', style: TextStyle(fontWeight: FontWeight.w700)),
+                  Text(loc.procurementStatus, style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height:8),
                   ...timeline.map((t)=> Padding(padding: const EdgeInsets.symmetric(vertical:4), child: Row(children: [Icon(t.isCompleted? Icons.check_circle: t.isCurrent? Icons.radio_button_checked: Icons.radio_button_unchecked, size:16, color: t.isCompleted? const Color(0xFF2E7D32): t.isCurrent? const Color(0xFFEF6C00): Colors.grey), SizedBox(width:8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[Text(t.title, style: TextStyle(fontSize:12, fontWeight: t.isCurrent? FontWeight.w700: FontWeight.normal)), Text(t.subtitle, style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant))]))]))),
                   const SizedBox(height:8),
@@ -160,12 +162,12 @@ class _DayPlannerScreenState extends ConsumerState<DayPlannerScreen>{
                 ])),
                 const SizedBox(height:12),
                 // Receipt button if completed
-                if (timeline!=null && timeline.any((t)=> t.title=='Completed' && t.isCompleted)) SizedBox(width: double.infinity, child: OutlinedButton.icon(icon: const Icon(Icons.receipt_long), label: const Text('View Digital Receipt'), onPressed: ()=> context.push('/receipt?bookingId=${booking.id}'))),
+                if (timeline!=null && timeline.any((t)=> t.title=='Completed' && t.isCompleted)) SizedBox(width: double.infinity, child: OutlinedButton.icon(icon: const Icon(Icons.receipt_long), label: Text(loc.viewReceipt), onPressed: ()=> context.push('/receipt?bookingId=${booking.id}'))),
                 const SizedBox(height:12),
                 Row(children: [
-                  Expanded(child: OutlinedButton.icon(icon: Icon(_reminderOn? Icons.notifications_active: Icons.notifications_off), label: Text(_reminderOn? 'Reminder ON (-30m)':'Reminder OFF'), onPressed: ()=> setState(()=> _reminderOn=!_reminderOn))),
+                  Expanded(child: OutlinedButton.icon(icon: Icon(_reminderOn? Icons.notifications_active: Icons.notifications_off), label: Text(_reminderOn? loc.reminderOn: loc.reminderOff), onPressed: ()=> setState(()=> _reminderOn=!_reminderOn))),
                   const SizedBox(width:8),
-                  Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.qr_code), label: const Text('Show Token'), onPressed: ()=> context.push('/token'))),
+                  Expanded(child: ElevatedButton.icon(icon: const Icon(Icons.qr_code), label: Text(loc.showToken), onPressed: ()=> context.push('/token'))),
                 ]),
                 const SizedBox(height:6),
                 Text(_reminderOn? 'Reminder: 30 min before slot • Queue movement • Turn approaching — via FCM (mock if no creds)':'Enable reminder for slot updates', textAlign: TextAlign.center, style: TextStyle(fontSize:10, color: Theme.of(context).colorScheme.onSurfaceVariant)),

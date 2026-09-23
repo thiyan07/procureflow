@@ -16,6 +16,7 @@ import '../../features/notifications/presentation/notifications_screen.dart';
 import '../../features/assistant/presentation/assistant_screen.dart';
 import '../../features/staff/presentation/operator_dashboard_screen.dart';
 import '../../features/staff/presentation/operator_queue_screen.dart';
+import '../../features/staff/presentation/qr_scanner_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/planner/presentation/day_planner_screen.dart';
 import '../../features/feedback/presentation/feedback_screen.dart';
@@ -51,6 +52,7 @@ class AppRouter {
       // Operator per spec
       GoRoute(path: '/operator', builder: (c, s) => const OperatorDashboardScreen()),
       GoRoute(path: '/operator/queue', builder: (c, s) => const OperatorQueueScreen()),
+      GoRoute(path: '/operator/scan', builder: (c, s) => const QrScannerScreen()),
       GoRoute(path: '/operator/procurement', builder: (c, s) => const ProcurementScreen()),
       GoRoute(path: '/operator/analytics', builder: (c, s) => const AnalyticsScreen()),
       // Legacy alias for analytics

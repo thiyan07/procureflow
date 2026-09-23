@@ -13,11 +13,21 @@ class ProcurementStage(str, enum.Enum):
     PROCUREMENT = "PROCUREMENT"
     COMPLETED = "COMPLETED"
 
+class ApprovalStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    OPERATOR_APPROVED = "OPERATOR_APPROVED"
+    ADMIN_APPROVED = "ADMIN_APPROVED"
+    NONE = "NONE"
+    # alias for pending admin
+    PENDING_ADMIN = "PENDING"
+
 class Procurement(Base):
     __tablename__ = "procurements"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     booking_id: Mapped[str] = mapped_column(String, ForeignKey("bookings.id", ondelete="CASCADE"), unique=True, nullable=False)
     stage: Mapped[str] = mapped_column(String(30), default=ProcurementStage.BOOKING_CONFIRMED.value)
+    approval_status: Mapped[str] = mapped_column(String(30), default=ApprovalStatus.NONE.value)
+    pending_stage: Mapped[str | None] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

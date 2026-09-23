@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, datetime, timezone
@@ -7,8 +8,26 @@ from app.models.procurement_centre import ProcurementCentre
 from app.models.slot import Slot
 from app.models.queue import CentreQueueState
 from app.schemas.centre import CentreOut, CentreStatusOut
-from app.services.scheduling_service import calculate_wait
+from app.services.scheduling_service import calculate_wait, haversine, get_farmer_coords
 from pydantic import BaseModel
+
+security_optional = HTTPBearer(auto_error=False)
+
+def get_optional_user(credentials: HTTPAuthorizationCredentials | None = Depends(security_optional), db: Session = Depends(get_db)):
+    if credentials is None:
+        return None
+    token = credentials.credentials
+    try:
+        from app.core.security import decode_token
+        from app.models.user import User
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+        user_id = payload.get("sub")
+        user = db.get(User, user_id)
+        return user
+    except Exception:
+        return None
 
 router = APIRouter()
 
@@ -163,8 +182,18 @@ def update_centre(centre_id: str, payload: CentreUpdate, db: Session = Depends(g
     return c
 
 @router.get("/{centre_id}/slot-recommendations")
-def slot_recommendations(centre_id: str, date: date = Query(...), commodity_id: str | None = None, estimated_quantity: float = Query(10), db: Session = Depends(get_db)):
+def slot_recommendations(
+    centre_id: str,
+    date: date = Query(...),
+    commodity_id: str | None = None,
+    estimated_quantity: float = Query(10),
+    farmer_id: str | None = Query(None, description="Optional farmer_id for explicit lookup; else derived from auth token"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_optional_user),
+):
     from app.models.commodity import Commodity
+    from app.models.farmer import Farmer
+    from app.models.booking import Booking
     c = db.get(ProcurementCentre, centre_id)
     if not c:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Centre not found"})
@@ -176,21 +205,89 @@ def slot_recommendations(centre_id: str, date: date = Query(...), commodity_id: 
         else:
             # try by name
             commodity_name = commodity_id
+    # --- farmer-aware context (deterministic, no external APIs) ---
+    farmer = None
+    farmer_past_count = 0
+    farmer_distance_km = None
+    farmer_commodity_match = False
+    farmer_context = None
+    personalized_reason = None
+    # Resolve farmer: prefer explicit farmer_id query, else auth token mapping user->farmer
+    try:
+        if farmer_id:
+            farmer = db.get(Farmer, farmer_id)
+            # also allow farmer_id as farmer farmer_id code like FARM-xxx
+            if not farmer:
+                farmer = db.query(Farmer).filter(Farmer.farmer_id == farmer_id).first()
+        if not farmer and current_user is not None:
+            farmer = db.query(Farmer).filter(Farmer.user_id == current_user.id).first()
+            # fallback: if current_user.id itself is farmer.id (mock mode may store farmer id as user id)
+            if not farmer:
+                farmer = db.get(Farmer, current_user.id)
+        if farmer:
+            # past bookings count for that farmer per centre (exclude cancelled)
+            farmer_past_count = db.query(Booking).filter(Booking.farmer_id == farmer.id, Booking.centre_id == centre_id, Booking.status != "CANCELLED").count()
+            farmer_commodity_match = (farmer.primary_commodity or "").strip().lower() == commodity_name.strip().lower()
+            coords = get_farmer_coords(farmer.district, farmer.village)
+            if coords and c.lat is not None and c.lng is not None:
+                farmer_distance_km = haversine(coords[0], coords[1], c.lat, c.lng)
+            farmer_context = {
+                "farmer_id": farmer.id,
+                "farmer_code": farmer.farmer_id,
+                "village": farmer.village,
+                "district": farmer.district,
+                "primary_commodity": farmer.primary_commodity,
+                "past_bookings_at_centre": farmer_past_count,
+                "distance_km": round(farmer_distance_km, 1) if farmer_distance_km is not None else None,
+                "commodity_match": farmer_commodity_match,
+                "centre_name": c.name,
+            }
+            # Build personalized chip text as required: "Recommended for you (past 2 bookings at Bhavani)"
+            # Use short centre name (last part after ' - ')
+            short_name = c.name.split(" - ")[-1] if " - " in c.name else c.name
+            # shorten further to first word for chip consistency (e.g. Bhavani)
+            short_word = short_name.split()[0] if short_name else c.name
+            if farmer_past_count > 0:
+                personalized_reason = f"Recommended for you (past {farmer_past_count} booking{'s' if farmer_past_count != 1 else ''} at {short_word})"
+                if farmer_commodity_match:
+                    personalized_reason += f" • {commodity_name} match"
+                if farmer_distance_km is not None and farmer_distance_km < 30:
+                    personalized_reason += f" • {round(farmer_distance_km,1)} km away"
+            elif farmer_commodity_match or (farmer_distance_km is not None and farmer_distance_km < 30):
+                parts = []
+                if farmer_commodity_match:
+                    parts.append(f"{commodity_name} match")
+                if farmer_distance_km is not None and farmer_distance_km < 30:
+                    parts.append(f"{round(farmer_distance_km,1)} km away")
+                if parts:
+                    personalized_reason = f"Recommended for you ({', '.join(parts)})"
+    except Exception:
+        # farmer-aware must never break generic flow
+        pass
+
     slots = db.query(Slot).filter(Slot.centre_id == centre_id, Slot.date == date).all()
     from app.services.scheduling_service import SlotCandidate, compute_scheduling, get_recommendation
     candidates = [SlotCandidate(s, c) for s in slots]
-    eligible = compute_scheduling(candidates, c, date, commodity_name, estimated_quantity)
+    eligible = compute_scheduling(candidates, c, date, commodity_name, estimated_quantity, farmer_past_count=farmer_past_count, farmer_distance_km=farmer_distance_km, farmer_commodity_match=farmer_commodity_match)
     best, alts, wait, reason = get_recommendation(eligible)
     def to_out(slot):
         return {"id": slot.id, "centre_id": slot.centre_id, "date": slot.date, "start_time": slot.start_time, "end_time": slot.end_time, "capacity": slot.capacity, "booked": slot.booked, "available": slot.capacity - slot.booked, "status": slot.status}
     if not best:
-        return {"recommended_slot": None, "expected_wait_minutes": 0, "reason": reason, "alternatives": [], "debug": {"eligible_count": 0}}
+        return {"recommended_slot": None, "expected_wait_minutes": 0, "reason": reason, "alternatives": [], "debug": {"eligible_count": 0}, "farmer_context": farmer_context, "personalized_reason": personalized_reason}
+    # If personalized_reason exists, prefer it as main reason augmentation (still keep deterministic base reason)
+    final_reason = personalized_reason if personalized_reason else reason
+    # Ensure debug includes farmer info even if no farmer
+    debug = best.debug.copy()
+    debug["farmer_context"] = farmer_context
     return {
         "recommended_slot": to_out(best.slot),
         "expected_wait_minutes": wait,
-        "reason": reason,
+        "reason": final_reason,
+        "base_reason": reason,
+        "personalized_reason": personalized_reason,
         "alternatives": [to_out(a.slot) for a in alts],
-        "debug": best.debug,
+        "debug": debug,
+        "farmer_context": farmer_context,
     }
 
 @router.get("/{centre_id}/documents")

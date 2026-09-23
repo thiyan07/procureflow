@@ -203,18 +203,62 @@ class MockSlotRepository implements SlotRepository {
   Future<List<Slot>> getSlots(String centreId, DateTime date) async {
     await Future.delayed(AppConstants.mockDelay);
     final slots = _db.generateSlots(centreId, date);
-    // Mark recommended: lowest occupancy with available
+    // Farmer-aware: check past bookings and commodity match for demo farmer
+    final pastCount = _db.bookings.values.where((b) => b.farmerId == _db.demoFarmer.id && b.centreId == centreId).length;
+    final commodityMatch = _db.demoFarmer.primaryCommodity.toLowerCase() == 'paddy'.toLowerCase();
+    // bias: if pastCount>0 or commodityMatch, apply slight boost to first slots (deterministic)
+    // For demo, still pick lowest occupancy but annotate farmer boost
     if (slots.isNotEmpty) {
       Slot? best;
+      // Simple farmer-aware scoring simulation: booked - pastCount bias
       for (final s in slots) {
         if (s.isFull) continue;
-        if (best == null || s.booked < best.booked) best = s;
+        if (best == null) {
+          best = s;
+        } else {
+          // farmer at Bhavani gets -2 effective booked
+          final effBooked = s.booked - (centreId == 'c1' && pastCount > 0 ? 2 : 0) - (commodityMatch ? 1 : 0);
+          final bestEff = best.booked - (centreId == 'c1' && pastCount > 0 ? 2 : 0) - (commodityMatch ? 1 : 0);
+          if (effBooked < bestEff || (effBooked == bestEff && s.start.isBefore(best.start))) {
+            best = s;
+          }
+        }
       }
       if (best != null) {
         return slots.map((s) => s.id == best!.id ? s.copyWith(isRecommended: true) : s).toList();
       }
     }
     return slots;
+  }
+
+  Future<Map<String, dynamic>?> getRecommendation(String centreId, DateTime date, {String commodity = 'Paddy', double qty = 10}) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final pastCount = _db.bookings.values.where((b) => b.farmerId == _db.demoFarmer.id && b.centreId == centreId).length;
+    final slots = _db.generateSlots(centreId, date);
+    final available = slots.where((s) => !s.isFull).toList();
+    if (available.isEmpty) return null;
+    available.sort((a, b) => a.booked.compareTo(b.booked));
+    final best = available.first;
+    final centreName = _db.centres.firstWhere((c) => c.id == centreId, orElse: () => _db.centres.first).name;
+    final shortWord = centreName.split(' ').first;
+    String? personalized;
+    if (pastCount > 0) {
+      personalized = 'Recommended for you (past $pastCount booking${pastCount != 1 ? 's' : ''} at $shortWord)';
+      if (_db.demoFarmer.primaryCommodity.toLowerCase() == commodity.toLowerCase()) {
+        personalized += ' • $commodity match';
+      }
+    }
+    return {
+      'recommended_slot': {'id': best.id},
+      'personalized_reason': personalized,
+      'farmer_context': {
+        'past_bookings_at_centre': pastCount,
+        'centre_name': centreName,
+        'distance_km': centreId == 'c1' ? 5.2 : 28.0,
+        'commodity_match': _db.demoFarmer.primaryCommodity.toLowerCase() == commodity.toLowerCase(),
+      },
+      'reason': personalized ?? 'Lower expected centre load.',
+    };
   }
 
   @override
@@ -359,11 +403,116 @@ class MockQueueRepository implements QueueRepository {
     final b = _db.bookings[bookingId];
     if (b != null) _db.bookings[bookingId] = b.copyWith(queueStatus: status);
   }
+
+  @override
+  Future<Map<String, dynamic>> getQueueCorrection(String bookingId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final booking = _db.bookings[bookingId];
+    if (booking == null) return {};
+    final ordinal = _db.bookingOrdinal[bookingId] ?? 27;
+    // deterministic: simulate PROCESSING counted naive vs corrected
+    // For mock, assume 1 PROCESSING ahead if ordinal>16 (so corrected differs by 1)
+    final aheadCorrected = (ordinal - _db.globalCurrentOrdinal).clamp(0, 100);
+    // naive includes PROCESSING as well (here same+1 if gap)
+    final hasProcessingAhead = ordinal > 18 ? 1 : 0;
+    final aheadNaive = aheadCorrected + hasProcessingAhead;
+    final correctionApplied = aheadNaive != aheadCorrected;
+    // gap detection: if ordinal gap >2 from global (simulated missed call)
+    final gap = (ordinal - _db.globalCurrentOrdinal - aheadCorrected - 1).abs();
+    final missedCall = gap > 2;
+    // duplicate risk: check if another booking same date exists (mock)
+    bool duplicateRisk = false;
+    Map<String, dynamic> fraudFlags = {};
+    for (final other in _db.bookings.values) {
+      if (other.id != bookingId && other.farmerId == booking.farmerId && other.date.year == booking.date.year && other.date.month == booking.date.month && other.date.day == booking.date.day) {
+        duplicateRisk = true;
+        fraudFlags['cross_centre_duplicate'] = true;
+        fraudFlags['cross_centre_token'] = other.tokenNumber;
+        break;
+      }
+    }
+    // mobile duplicate check (same mobile different farmerId)
+    for (final other in _db.bookings.values) {
+      if (other.id != bookingId && other.date.year == booking.date.year && other.date.month == booking.date.month && other.date.day == booking.date.day) {
+        // find farmer mobile match: demoFarmer mobile vs other farmer
+        // In mock, all bookings share demoFarmer, so skip
+      }
+    }
+    return {
+      'booking_id': bookingId,
+      'token_number': booking.tokenNumber,
+      'queue_position': ordinal,
+      'farmers_ahead_corrected': aheadCorrected,
+      'farmers_ahead_naive': aheadNaive,
+      'farmers_ahead': aheadCorrected,
+      'estimated_wait_corrected': _calcWait(aheadCorrected, AppConstants.defaultCounters),
+      'estimated_wait_naive': _calcWait(aheadNaive, AppConstants.defaultCounters),
+      'correction_applied': correctionApplied,
+      'queueCorrectionNote': 'Queue position calculated from database, PROCESSING not counted as ahead',
+      'correction_note': correctionApplied ? 'Queue position corrected — processing not counted' : null,
+      'missed_call_flag': missedCall,
+      'position_gap': gap,
+      'gap': gap,
+      'fraud_flags': fraudFlags,
+      'duplicate_risk': duplicateRisk,
+    };
+  }
 }
 
 // ---------- Procurement ----------
 class MockProcurementRepository implements ProcurementRepository {
   final _db = MockDatabase.instance;
+
+  bool _requiresApproval(String bookingId) {
+    final b = _db.bookings[bookingId];
+    final p = _db.payments[bookingId];
+    if (b != null && b.quantityQuintal > 50) return true;
+    if (p != null && p.totalAmount > 100000) return true;
+    return false;
+  }
+
+  String _stageToBackend(ProcurementStage s) {
+    const map = {
+      ProcurementStage.bookingConfirmed: 'BOOKING_CONFIRMED',
+      ProcurementStage.arrivedAtCentre: 'ARRIVED',
+      ProcurementStage.weighment: 'WEIGHMENT',
+      ProcurementStage.qualityCheck: 'QUALITY_CHECK',
+      ProcurementStage.procurement: 'PROCUREMENT',
+      ProcurementStage.completed: 'COMPLETED',
+      ProcurementStage.paymentProcessing: 'COMPLETED',
+      ProcurementStage.paymentCompleted: 'COMPLETED',
+    };
+    return map[s] ?? 'ARRIVED';
+  }
+
+  @override
+  Future<ComplianceResult> complianceCheck(String bookingId, String question, String answer) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final b = _db.bookings[bookingId];
+    if (b == null) throw Exception('Booking not found');
+    final al = answer.toLowerCase();
+    // Deterministic rule mirrors backend compliance_service
+    // For mock we don't have grade/moisture stored; assume Grade B scenario if question mentions Grade B
+    final isGradeB = al.contains('iso') || al.contains('moisture');
+    final verified = isGradeB && answer.length >= 10;
+    final reason = verified
+        ? 'Grade B justified — answer cites ISO/moisture spec matching recorded data.'
+        : (answer.length < 10 ? 'Answer too brief for audit (min 10 chars).' : 'Answer does not cite required evidence (ISO/moisture) for grade B.');
+    final verdict = verified ? 'VERIFIED' : 'NEEDS REVIEW';
+    final justification = 'Audit Justification — TNCSC DPC Erode | Booking $bookingId | Token ${b.tokenNumber} | '
+        'Commodity ${b.commodity} ${b.quantityQuintal} quintal | Grade ${isGradeB ? "B" : "PENDING"} | '
+        'Moisture — | MSP ₹2441/q | Q: "$question" | A: "$answer" | Verdict: $verdict — $reason | Ref: $bookingId/${b.date.toIso8601String()} | Deterministic check, no ML.';
+    return ComplianceResult(
+      verified: verified,
+      generatedJustification: justification,
+      reason: reason,
+      commodity: b.commodity,
+      quantity: b.quantityQuintal,
+      grade: isGradeB ? 'B' : null,
+      moisture: null,
+    );
+  }
+
   @override
   Future<List<TimelineStep>> getProcurementTimeline(String bookingId) async {
     await Future.delayed(const Duration(milliseconds: 300));
@@ -406,8 +555,70 @@ class MockProcurementRepository implements ProcurementRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> getProcurement(String bookingId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final b = _db.bookings[bookingId];
+    if (b == null) throw Exception('Booking not found');
+    final status = _db.procurementApprovalStatus[bookingId] ?? 'NONE';
+    final pending = _db.procurementPendingStage[bookingId];
+    return {
+      'id': bookingId,
+      'booking_id': bookingId,
+      'stage': _stageToBackend(b.procurementStage),
+      'approval_status': status,
+      'pending_stage': pending,
+      'created_at': b.createdAt.toIso8601String(),
+    };
+  }
+
+  @override
+  Future<void> approveStage(String bookingId, ProcurementStage stage) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    // only admin path — set approved and advance
+    final backendStage = _stageToBackend(stage);
+    final pending = _db.procurementPendingStage[bookingId];
+    if (pending != null && pending != backendStage) {
+      throw Exception('Pending is $pending, requested $backendStage');
+    }
+    _db.procurementApprovalStatus[bookingId] = 'ADMIN_APPROVED';
+    _db.procurementPendingStage.remove(bookingId);
+    final b = _db.bookings[bookingId];
+    if (b != null) _db.bookings[bookingId] = b.copyWith(procurementStage: stage);
+    if (stage == ProcurementStage.paymentProcessing) {
+      final p = _db.payments[bookingId];
+      if (p != null) _db.payments[bookingId] = Payment(
+        id: p.id, bookingId: p.bookingId, commodity: p.commodity, quantityQuintal: p.quantityQuintal, ratePerQuintal: p.ratePerQuintal, totalAmount: p.totalAmount, status: PaymentStatus.processing);
+    } else if (stage == ProcurementStage.paymentCompleted) {
+      final p = _db.payments[bookingId];
+      if (p != null) _db.payments[bookingId] = Payment(
+        id: p.id, bookingId: p.bookingId, commodity: p.commodity, quantityQuintal: p.quantityQuintal, ratePerQuintal: p.ratePerQuintal, totalAmount: p.totalAmount, status: PaymentStatus.completed, paymentDate: DateTime.now(), transactionId: 'TXN${DateTime.now().millisecondsSinceEpoch}');
+    }
+  }
+
+  @override
   Future<void> advanceStage(String bookingId, ProcurementStage stage) async {
     await Future.delayed(const Duration(milliseconds: 300));
+    // Check if requires approval and not already pending admin path (simulate operator role)
+    // For mock, we inspect current stored user role via LocalStorage
+    String? role;
+    try {
+      final jsonStr = LocalStorage.instance.getString(AppConstants.keyUserJson);
+      if (jsonStr != null) {
+        final m = jsonDecode(jsonStr) as Map<String, dynamic>;
+        role = m['role'] as String?;
+      }
+    } catch (_) {}
+    final needsApproval = _requiresApproval(bookingId);
+    if (role == 'CENTRE_OPERATOR' && needsApproval) {
+      // operator request -> pending admin
+      _db.procurementApprovalStatus[bookingId] = 'PENDING';
+      _db.procurementPendingStage[bookingId] = _stageToBackend(stage);
+      // store OPERATOR_APPROVED as intermediate? Keep PENDING for admin gate
+      return;
+    }
+    // direct advance (admin or small quantity)
+    _db.procurementApprovalStatus[bookingId] = role == 'ADMIN' ? 'ADMIN_APPROVED' : 'OPERATOR_APPROVED';
+    _db.procurementPendingStage.remove(bookingId);
     final b = _db.bookings[bookingId];
     if (b != null) _db.bookings[bookingId] = b.copyWith(procurementStage: stage);
     // also sync payment when reaching payment stages

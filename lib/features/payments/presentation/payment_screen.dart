@@ -5,14 +5,16 @@ import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../l10n/app_localizations.dart';
 
 class PaymentScreen extends ConsumerWidget {
   const PaymentScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final loc = AppLocalizations.of(context)!;
     final bookingAsync = ref.watch(_activeBookingProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Payment Status')),
+      appBar: AppBar(title: Text(loc.payment)),
       body: bookingAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e,s) => ErrorState(message: e.toString()),
@@ -21,7 +23,9 @@ class PaymentScreen extends ConsumerWidget {
           return FutureBuilder(
             future: ref.read(paymentRepositoryProvider).getPayment(booking.id),
             builder: (context, snap){
-              if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+              if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snap.hasError) return ErrorState(message: snap.error.toString(), onRetry: ()=> (context as Element).markNeedsBuild());
+              if (!snap.hasData || snap.data == null) return const ErrorState(message: 'Payment not yet generated — complete procurement first');
               final p = snap.data!;
               final isCompleted = p.status==PaymentStatus.completed;
               return ListView(padding: const EdgeInsets.all(16), children: [

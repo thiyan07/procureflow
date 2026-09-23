@@ -6,6 +6,7 @@ import 'core/routing/app_router.dart';
 import 'core/storage/local_storage.dart';
 import 'core/notifications/fcm_service.dart';
 import 'core/config/demo_config.dart';
+import 'services/providers.dart';
 import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
@@ -24,13 +25,7 @@ class ProcureFlowApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Safe read without throwing if not initialized (tests)
-    String lang = 'en';
-    try {
-      lang = LocalStorage.instance.languageCode;
-    } catch (_) {
-      lang = 'en';
-    }
+    final lang = ref.watch(languageCodeProvider);
     return MaterialApp.router(
       title: 'ProcureFlow',
       debugShowCheckedModeBanner: false,

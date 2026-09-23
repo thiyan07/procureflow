@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import date, datetime, timezone
@@ -40,10 +40,6 @@ def _commodities_for_booking(b: Booking):
 @router.post("", response_model=BookingOut, status_code=201)
 def create_booking(payload: BookingCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     farmer = _farmer_for_user(db, user)
-    # RULE 8: duplicate active booking check
-    active = db.query(Booking).filter(Booking.farmer_id == farmer.id, Booking.status == BookingStatus.CONFIRMED.value).first()
-    if active:
-        raise HTTPException(status_code=400, detail={"code": "DUPLICATE_BOOKING", "message": "Active booking already exists. Cancel first."})
 
     centre = db.get(ProcurementCentre, payload.centre_id)
     if not centre:
@@ -58,6 +54,26 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db), user: 
             raise HTTPException(status_code=404, detail={"code": "SLOT_NOT_FOUND", "message": "Slot not found"})
         if slot.centre_id != payload.centre_id:
             raise HTTPException(status_code=400, detail={"code": "SLOT_MISMATCH", "message": "Slot does not belong to centre"})
+        # RULE 8 enhanced: cross-centre duplicate same farmer/date (deterministic fraud check)
+        # Also fraud: same mobile with different farmerId booking same date
+        # Check active booking same date across any centre
+        existing_same_date = db.query(Booking).filter(
+            Booking.farmer_id == farmer.id,
+            Booking.status == BookingStatus.CONFIRMED.value,
+            Booking.date == slot.date
+        ).first()
+        if existing_same_date:
+            raise HTTPException(status_code=409, detail={"code": "DUPLICATE_CROSS_CENTRE", "message": f"Duplicate booking: farmer already has confirmed booking on {slot.date} (token {existing_same_date.token_number}) at another centre. One booking per day allowed."})
+        # Same mobile with different farmerId fraud: same mobile, different Farmer record, active booking same date
+        other_farmers = db.query(Farmer).filter(Farmer.mobile == farmer.mobile, Farmer.id != farmer.id).all()
+        for other in other_farmers:
+            dup = db.query(Booking).filter(
+                Booking.farmer_id == other.id,
+                Booking.status == BookingStatus.CONFIRMED.value,
+                Booking.date == slot.date
+            ).first()
+            if dup:
+                raise HTTPException(status_code=409, detail={"code": "DUPLICATE_MOBILE", "message": f"Fraud check: same mobile {farmer.mobile} already used for booking on {slot.date} with different farmerId {other.farmer_id} (token {dup.token_number})."})
         # past check
         slot_dt = datetime.combine(slot.date, slot.start_time, tzinfo=timezone.utc)
         if slot_dt < datetime.now(timezone.utc):
@@ -111,9 +127,9 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db), user: 
         db.add(booking)
         db.flush()
         # queue token
-        # estimate wait
+        # estimate wait - PROCESSING not counted as ahead (correction)
         from app.services.scheduling_service import calculate_wait
-        farmers_ahead = db.query(QueueToken).filter(QueueToken.centre_id == payload.centre_id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value])).count()
+        farmers_ahead = db.query(QueueToken).filter(QueueToken.centre_id == payload.centre_id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value])).count()
         wait = calculate_wait(farmers_ahead, centre.avg_processing_minutes, centre.active_counters)
         qt = QueueToken(centre_id=payload.centre_id, booking_id=booking.id, token_number=token_number, position=ordinal, status=QueueStatus.WAITING.value, estimated_wait_minutes=wait)
         db.add(qt)
@@ -168,9 +184,36 @@ def create_booking(payload: BookingCreate, db: Session = Depends(get_db), user: 
     )
 
 @router.get("", response_model=list[BookingOut])
-def list_bookings(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_bookings(response: Response, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     farmer = _farmer_for_user(db, user)
     bookings = db.query(Booking).filter(Booking.farmer_id == farmer.id).order_by(Booking.created_at.desc()).all()
+    # Fraud detection: cross-centre same date duplicates, mobile duplicates
+    fraud_flag = False
+    fraud_details: list[str] = []
+    # group by date
+    date_groups: dict[date, list[Booking]] = {}
+    for bk in bookings:
+        if bk.status == BookingStatus.CONFIRMED.value:
+            date_groups.setdefault(bk.date, []).append(bk)
+    for d, lst in date_groups.items():
+        if len(lst) > 1:
+            fraud_flag = True
+            fraud_details.append(f"DUPLICATE_CROSS_CENTRE on {d}: {len(lst)} active bookings")
+    # mobile duplicate: same mobile different farmerId same date
+    other_farmers = db.query(Farmer).filter(Farmer.mobile == farmer.mobile, Farmer.id != farmer.id).all()
+    for other in other_farmers:
+        for bk in bookings:
+            if bk.status == BookingStatus.CONFIRMED.value:
+                dup = db.query(Booking).filter(Booking.farmer_id == other.id, Booking.status == BookingStatus.CONFIRMED.value, Booking.date == bk.date).first()
+                if dup:
+                    fraud_flag = True
+                    fraud_details.append(f"DUPLICATE_MOBILE on {bk.date}: mobile {farmer.mobile} used by farmerId {other.farmer_id}")
+                    break
+    if fraud_flag:
+        response.headers["X-Fraud-Flag"] = "true"
+        response.headers["X-Fraud-Details"] = "; ".join(fraud_details)[:500]
+    else:
+        response.headers["X-Fraud-Flag"] = "false"
     out = []
     for b in bookings:
         qt = db.query(QueueToken).filter(QueueToken.booking_id == b.id).first()
@@ -238,12 +281,12 @@ def reschedule_booking(booking_id: str, payload: RescheduleRequest, db: Session 
     booking.slot_id = new_slot.id
     booking.date = new_slot.date
     db.flush()
-    # update queue wait
+    # update queue wait - PROCESSING excluded
     qt = db.query(QueueToken).filter(QueueToken.booking_id == booking.id).first()
     if qt:
         from app.services.scheduling_service import calculate_wait
         centre = db.get(ProcurementCentre, booking.centre_id)
-        farmers_ahead = db.query(QueueToken).filter(QueueToken.centre_id == booking.centre_id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value])).count()
+        farmers_ahead = db.query(QueueToken).filter(QueueToken.centre_id == booking.centre_id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value])).count()
         qt.estimated_wait_minutes = calculate_wait(farmers_ahead, centre.avg_processing_minutes if centre else 3, centre.active_counters if centre else 3)
     from app.services.notification_service import create_notification
     create_notification(db, user.id, "Booking Rescheduled", f"Booking {booking.token_number} rescheduled to {new_slot.start_time}", "slot_confirmed", {"booking_id": booking.id})

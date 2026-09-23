@@ -1,5 +1,7 @@
+import 'dart:convert';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
+import '../../core/storage/local_storage.dart';
 import '../../models/slot.dart';
 import '../../models/booking.dart';
 import '../repositories.dart';
@@ -8,10 +10,39 @@ class ApiSlotRepository implements SlotRepository {
   final ApiClient _client;
   ApiSlotRepository(this._client);
 
+  String? _farmerIdFromStorage() {
+    try {
+      final jsonStr = LocalStorage.instance.getString(AppConstants.keyUserJson);
+      if (jsonStr == null) return null;
+      final j = jsonDecode(jsonStr) as Map<String, dynamic>;
+      // farmer may be nested
+      if (j['farmer'] is Map && (j['farmer'] as Map)['id'] != null) {
+        return (j['farmer'] as Map)['id'] as String;
+      }
+      // fallback: id is farmer id for farmer role
+      if (j['role'] == 'FARMER' && j['id'] != null) return j['id'] as String;
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic> _farmerAwareQuery(DateTime date, {String commodity = 'Paddy', double qty = 10}) {
+    final q = <String, dynamic>{
+      'date': date.toIso8601String().split('T').first,
+      'estimated_quantity': qty,
+      'commodity_id': commodity,
+    };
+    final fid = _farmerIdFromStorage();
+    if (fid != null) q['farmer_id'] = fid;
+    return q;
+  }
+
   @override
   Future<List<Slot>> getSlots(String centreId, DateTime date) async {
     final dateStr = date.toIso8601String().split('T').first;
     final list = await _client.getList('/api/v1/slots', query: {'centre_id': centreId, 'date': dateStr});
+    // try farmer-aware recommendation (uses auth token + farmer_id query)
     final rec = await _tryRecommend(centreId, date);
     String? recId = rec?['recommended_slot']?['id'] as String?;
     return list.map((e) {
@@ -32,12 +63,17 @@ class ApiSlotRepository implements SlotRepository {
     }).toList();
   }
 
-  Future<Map<String, dynamic>?> _tryRecommend(String centreId, DateTime date) async {
+  Future<Map<String, dynamic>?> _tryRecommend(String centreId, DateTime date, {String commodity = 'Paddy', double qty = 10}) async {
     try {
-      return await _client.get('/api/v1/centres/$centreId/slot-recommendations', query: {'date': date.toIso8601String().split('T').first, 'estimated_quantity': 10});
+      return await _client.get('/api/v1/centres/$centreId/slot-recommendations', query: _farmerAwareQuery(date, commodity: commodity, qty: qty));
     } catch (_) {
       return null;
     }
+  }
+
+  /// Public farmer-aware recommendation for UI chip (exposed for slot_booking_screen.dart)
+  Future<Map<String, dynamic>?> getRecommendation(String centreId, DateTime date, {String commodity = 'Paddy', double qty = 10}) async {
+    return _tryRecommend(centreId, date, commodity: commodity, qty: qty);
   }
 
   @override

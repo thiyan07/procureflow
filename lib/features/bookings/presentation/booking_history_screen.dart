@@ -5,6 +5,8 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_error.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 
@@ -17,9 +19,10 @@ class BookingHistoryScreen extends ConsumerStatefulWidget {
 class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
   @override
   Widget build(BuildContext context) {
+    final loc = AppLocalizations.of(context)!;
     final auth = ref.watch(authStateProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Booking History')),
+      appBar: AppBar(title: Text(loc.booking)),
       body: auth.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e,s) => ErrorState(message: e.toString()),
@@ -79,18 +82,19 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
   }
 
   void _showDetails(BuildContext ctx, Booking b){
+    final loc = AppLocalizations.of(ctx)!;
     showModalBottomSheet(context: ctx, builder: (_)=> Padding(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children:[
-      Text('Booking ${b.tokenNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize:16)),
+      Text('${loc.booking} ${b.tokenNumber}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize:16)),
       const SizedBox(height:8),
-      _Row(label:'Centre', value: b.centreName),
-      _Row(label:'Date', value: AppDateUtils.formatDate(b.date)),
-      _Row(label:'Slot', value: '${AppDateUtils.formatTime(b.slotStart)} - ${AppDateUtils.formatTime(b.slotEnd)}'),
-      _Row(label:'Commodity', value: b.commodity),
-      _Row(label:'Quantity', value: '${b.quantityQuintal} quintal'),
-      _Row(label:'Status', value: b.queueStatus.name),
-      _Row(label:'Created', value: AppDateUtils.formatDate(b.createdAt)),
+      _Row(label: loc.centres, value: b.centreName),
+      _Row(label: loc.selectDate, value: AppDateUtils.formatDate(b.date)),
+      _Row(label: loc.bookSlot, value: '${AppDateUtils.formatTime(b.slotStart)} - ${AppDateUtils.formatTime(b.slotEnd)}'),
+      _Row(label: loc.selectCommodity, value: b.commodity),
+      _Row(label: loc.estimatedQuantity, value: '${b.quantityQuintal} ${loc.quintal}'),
+      _Row(label: loc.procurementStatus, value: b.queueStatus.name),
+      _Row(label: loc.estimatedWaiting, value: AppDateUtils.formatDate(b.createdAt)),
       const SizedBox(height:12),
-      SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.qr_code), label: const Text('Show Token'), onPressed: ()=> context.push('/token'))),
+      SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.qr_code), label: Text(loc.showToken), onPressed: ()=> context.push('/token'))),
     ])));
   }
 
@@ -102,7 +106,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking ${b.tokenNumber} cancelled')));
       ref.invalidate(_bookingsProvider);
       ref.invalidate(authStateProvider);
-    }catch(e){ if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    }catch(e){ if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e)))); }
   }
 
   Future<void> _rescheduleSheet(Booking b) async{
@@ -129,7 +133,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
           if (slots.isEmpty) const Text('No slots available for next day', style: TextStyle(color: Colors.black45)),
         ]),
       ));
-    }catch(e){ if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    }catch(e){ if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e)))); }
   }
 }
 

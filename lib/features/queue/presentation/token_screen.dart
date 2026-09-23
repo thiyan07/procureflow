@@ -6,15 +6,18 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
+import '../../../l10n/app_localizations.dart';
 
 class TokenScreen extends ConsumerWidget {
   const TokenScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(queueRefreshProvider);
+    final loc = AppLocalizations.of(context)!;
     final bookingAsync = ref.watch(_activeBookingProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('My Token')),
+      appBar: AppBar(title: Text(loc.myToken)),
       body: bookingAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e,s) => ErrorState(message: e.toString()),
@@ -40,13 +43,13 @@ class TokenScreen extends ConsumerWidget {
                 const SizedBox(height:6),
                 Text('Show this QR at the centre gate', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 const Divider(height:32),
-                _Row(label: 'Centre', value: booking.centreName),
+                _Row(label: 'Centre', value: booking.centreName.isEmpty ? booking.centreId : booking.centreName),
                 const SizedBox(height:8),
                 _Row(label: 'Date', value: AppDateUtils.formatDate(booking.date)),
                 const SizedBox(height:8),
-                _Row(label: 'Slot', value: AppDateUtils.formatTime(booking.slotStart)),
+                _Row(label: 'Slot', value: '${AppDateUtils.formatTime(booking.slotStart)} - ${AppDateUtils.formatTime(booking.slotEnd)}'),
                 const SizedBox(height:8),
-                _Row(label: 'Commodity', value: '${booking.commodity} • ${booking.quantityQuintal} quintal'),
+                _Row(label: 'Commodity', value: booking.commoditiesDisplay),
               ]),
             ),
             const SizedBox(height:16),
@@ -85,8 +88,8 @@ class _Row extends StatelessWidget {
   const _Row({required this.label, required this.value});
   @override
   Widget build(BuildContext context)=> Row(children:[
-    SizedBox(width:90, child: Text(label, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize:12))),
-    Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize:13))),
+    SizedBox(width:90, child: Text(label, style: const TextStyle(color: Color(0xFF5F6368), fontSize:12, fontWeight: FontWeight.w500))),
+    Expanded(child: Text(value.isEmpty ? '—' : value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize:13, color: Color(0xFF1A1C19)))),
   ]);
 }
 class _Mini extends StatelessWidget {

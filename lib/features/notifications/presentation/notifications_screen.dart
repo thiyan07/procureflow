@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/providers.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/utils/date_utils.dart';
 
@@ -13,9 +14,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>{
   int _limit=20;
   @override
   Widget build(BuildContext context){
+    final loc = AppLocalizations.of(context)!;
     final authAsync = ref.watch(_authProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: Text(loc.notifications)),
       body: authAsync.when(
         loading: ()=> const Center(child: CircularProgressIndicator()),
         error: (e,s)=> ErrorState(message: e.toString()),

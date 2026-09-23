@@ -22,18 +22,38 @@ class ApiProcurementRepository implements ProcurementRepository {
     }).toList();
   }
 
-  @override
-  Future<void> advanceStage(String bookingId, ProcurementStage stage) async {
-    final map = {
+  static String _toBackendStage(ProcurementStage stage) {
+    const map = {
       ProcurementStage.bookingConfirmed: 'BOOKING_CONFIRMED',
       ProcurementStage.arrivedAtCentre: 'ARRIVED',
       ProcurementStage.weighment: 'WEIGHMENT',
       ProcurementStage.qualityCheck: 'QUALITY_CHECK',
       ProcurementStage.procurement: 'PROCUREMENT',
       ProcurementStage.completed: 'COMPLETED',
-      ProcurementStage.paymentProcessing: 'COMPLETED', // backend has 6 stages; payment handled separately
+      ProcurementStage.paymentProcessing: 'COMPLETED',
       ProcurementStage.paymentCompleted: 'COMPLETED',
     };
-    await _client.post('/api/v1/procurements/$bookingId/advance', body: {'to_stage': map[stage] ?? 'ARRIVED'});
+    return map[stage] ?? 'ARRIVED';
+  }
+
+  @override
+  Future<void> advanceStage(String bookingId, ProcurementStage stage) async {
+    await _client.post('/api/v1/procurements/$bookingId/advance', body: {'to_stage': _toBackendStage(stage)});
+  }
+
+  @override
+  Future<Map<String, dynamic>> getProcurement(String bookingId) async {
+    return await _client.get('/api/v1/procurements/$bookingId');
+  }
+
+  @override
+  Future<void> approveStage(String bookingId, ProcurementStage stage) async {
+    await _client.post('/api/v1/procurements/$bookingId/approve', body: {'stage': _toBackendStage(stage)});
+  }
+
+  @override
+  Future<ComplianceResult> complianceCheck(String bookingId, String question, String answer) async {
+    final res = await _client.post('/api/v1/procurements/$bookingId/compliance-check', body: {'question': question, 'answer': answer});
+    return ComplianceResult.fromJson(res);
   }
 }

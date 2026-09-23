@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/storage/local_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/network/api_error.dart';
 import '../../../services/providers.dart';
+import '../../../services/api/api_slot_repository.dart';
+import '../../../services/mock/mock_repositories.dart';
 import '../../../models/slot.dart';
-import '../../../models/analytics.dart';
 import '../../../models/booking.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -34,6 +33,7 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
   DateTime _date = DateTime.now();
   String? _selectedSlotId;
   bool _booking = false;
+  bool _autoAdvanced = false;
 
   @override
   void didChangeDependencies() {
@@ -145,13 +145,13 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
             loading: ()=> [],
             error: (_,__)=> [],
           ),
-          onChanged: (v){ if(v!=null) setState((){ _centreId=v; _selectedSlotId=null; }); },
+          onChanged: (v){ if(v!=null) setState((){ _centreId=v; _selectedSlotId=null; _autoAdvanced=false; }); },
         ),
         const SizedBox(height:12),
         InkWell(
           onTap: () async {
             final picked = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days:7)));
-            if(picked!=null) setState((){ _date=picked; _selectedSlotId=null; });
+            if(picked!=null) setState((){ _date=picked; _selectedSlotId=null; _autoAdvanced=false; });
           },
           child: InputDecorator(
             decoration: const InputDecoration(labelText: 'Date', suffixIcon: Icon(Icons.calendar_today)),
@@ -166,20 +166,93 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
           error: (e,s) => ErrorState(message: e.toString(), onRetry:()=> ref.invalidate(_slotsProvider((_centreId,_date)))),
           data: (slots){
             if (slots.isEmpty) return const Text('No slots');
-            return Column(children: slots.map((s)=> _SlotTile(
-              slot: s,
-              selected: s.id==_selectedSlotId,
-              onTap: s.isFull ? null : ()=> setState(()=> _selectedSlotId=s.id),
-            )).toList());
+            final now = DateTime.now();
+            final futureSlots = slots.where((s) => s.start.isAfter(now) && !s.isFull).toList();
+            final allPast = futureSlots.isEmpty && slots.isNotEmpty;
+            if (allPast && !_autoAdvanced) {
+              final next = _date.add(const Duration(days: 1));
+              // auto advance to next day up to 7 days ahead
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !_autoAdvanced) {
+                  setState((){ _date = next; _selectedSlotId = null; _autoAdvanced = true; });
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("All today's slots are past — showing ${DateFormat('dd MMM').format(next)}")));
+                }
+              });
+              return Column(children:[
+                Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(12)), child: Row(children:[const Icon(Icons.info_outline, color: Color(0xFFEF6C00)), const SizedBox(width:8), Expanded(child: Text("All ${DateFormat('dd MMM').format(_date)} slots are past — auto moving to ${DateFormat('dd MMM').format(next)}", style: const TextStyle(fontSize:12)))])),
+                const SizedBox(height:8),
+                const Center(child: CircularProgressIndicator()),
+              ]);
+            }
+            final displaySlots = allPast ? [] : slots;
+            // reset autoAdvanced when user manually picks date
+            return Column(children: displaySlots.map((s){
+              final isPast = s.start.isBefore(now);
+              return _SlotTile(
+                slot: s,
+                selected: s.id==_selectedSlotId && !isPast,
+                onTap: (s.isFull || isPast) ? null : ()=> setState(()=> _selectedSlotId=s.id),
+              );
+            }).toList());
           },
         ),
         const SizedBox(height:12),
-        // AI recommendation preview
+        // Farmer-aware AI recommendation preview (passes farmer_id from authStateProvider)
         Consumer(builder: (context, ref, _){
           final slots = slotsAsync.value;
           if (slots==null) return const SizedBox();
           final rec = slots.where((s)=> s.isRecommended).firstOrNull;
           if (rec==null) return const SizedBox();
+          // farmer-aware details from provider (uses authStateProvider + repository getRecommendation)
+          final primaryCommodity = _rows.isNotEmpty ? _rows.first.commodity : 'Paddy';
+          final recDetailsAsync = ref.watch(_farmerRecommendationProvider((_centreId, _date, primaryCommodity)));
+          final recDetails = recDetailsAsync.value;
+          final personalized = recDetails?['personalized_reason'] as String?;
+          final farmerCtx = recDetails?['farmer_context'] as Map<String,dynamic>?;
+          final distance = farmerCtx?['distance_km'];
+          final pastCount = farmerCtx?['past_bookings_at_centre'];
+          final commodityMatch = farmerCtx?['commodity_match'] == true;
+          // Determine chip text: prefer personalized from backend, else fallback using pastCount
+          String chipText;
+          List<Widget> extraChips = [];
+          if (personalized != null && personalized.isNotEmpty) {
+            chipText = personalized;
+            extraChips.add(Container(
+              padding: const EdgeInsets.symmetric(horizontal:8, vertical:4),
+              decoration: BoxDecoration(color: AppTheme.primaryGreen, borderRadius: BorderRadius.circular(10)),
+              child: Text(chipText, style: const TextStyle(color: Colors.white, fontSize:10, fontWeight: FontWeight.w600)),
+            ));
+          } else {
+            chipText = 'Recommended - Lower expected load';
+            extraChips.add(const Text('Recommended - Lower expected load', style: TextStyle(fontWeight: FontWeight.w700, fontSize:12, color: AppTheme.primaryGreen)));
+            // Fallback: if we have auth and pastCount info via direct fallback (e.g. mock), show chip
+            if (pastCount != null && pastCount is int && pastCount > 0) {
+              extraChips.add(const SizedBox(height:4));
+              extraChips.add(Container(
+                padding: const EdgeInsets.symmetric(horizontal:6, vertical:2),
+                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), border: Border.all(color: AppTheme.primaryGreen), borderRadius: BorderRadius.circular(8)),
+                child: Text("Recommended for you (past $pastCount booking${pastCount != 1 ? "s" : ""} at ${_centreName.split(' ').first})", style: const TextStyle(fontSize:10, color: AppTheme.primaryGreen, fontWeight: FontWeight.w600)),
+              ));
+            }
+          }
+          // Always show distance/commodity badges if available and not already in personalized
+          final badges = <Widget>[];
+          if (personalized == null || !personalized.contains('km')) {
+            if (distance != null) {
+              badges.add(Container(
+                padding: const EdgeInsets.symmetric(horizontal:6, vertical:2),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade300)),
+                child: Text('$distance km away', style: const TextStyle(fontSize:10)),
+              ));
+            }
+            if (commodityMatch && (personalized == null || !personalized.contains('match'))) {
+              badges.add(Container(
+                padding: const EdgeInsets.symmetric(horizontal:6, vertical:2),
+                decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(8)),
+                child: Text('$primaryCommodity match', style: const TextStyle(fontSize:10, color: Color(0xFF6A1B9A))),
+              ));
+            }
+          }
           return Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.primaryGreen.withValues(alpha:0.3))),
@@ -187,8 +260,15 @@ class _SlotBookingScreenState extends ConsumerState<SlotBookingScreen> {
               const Icon(Icons.lightbulb, color: AppTheme.primaryGreen),
               const SizedBox(width:8),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-                const Text('Recommended - Lower expected load', style: TextStyle(fontWeight: FontWeight.w700, fontSize:12, color: AppTheme.primaryGreen)),
+                if (personalized != null && personalized.isNotEmpty)
+                  Wrap(spacing:6, runSpacing:4, children: extraChips)
+                else
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: extraChips),
+                const SizedBox(height:4),
+                if (badges.isNotEmpty) Wrap(spacing:6, children: badges),
+                const SizedBox(height:4),
                 Text('${DateFormat('hh:mm a').format(rec.start)} • ${rec.available} slots • Est. wait ~${(rec.booked*3/3).ceil()} min', style: const TextStyle(fontSize:12)),
+                if (recDetailsAsync.isLoading) const LinearProgressIndicator(minHeight:2),
               ])),
             ]),
           );
@@ -215,6 +295,38 @@ final _commoditiesProvider = FutureProvider<List<String>>((ref) async {
 final _slotsProvider = FutureProvider.family<List<Slot>, (String, DateTime)>((ref, arg) async {
   final (cid, date) = arg;
   return ref.watch(slotRepositoryProvider).getSlots(cid, date);
+});
+
+// Farmer-aware recommendation: passes farmer_id from authStateProvider to slot recommendation call
+final _farmerRecommendationProvider = FutureProvider.family<Map<String, dynamic>?, (String, DateTime, String)>((ref, arg) async {
+  final (cid, date, commodity) = arg;
+  // Watch auth to ensure rebuild when user changes; use farmer_id from token storage
+  final authAsync = ref.watch(authStateProvider);
+  final auth = authAsync.valueOrNull;
+  // Try repository getRecommendation (supports both Api and Mock)
+  final repo = ref.watch(slotRepositoryProvider);
+  try {
+    if (repo is ApiSlotRepository) {
+      // Api already reads farmer_id from LocalStorage, but we also ensure auth dependency
+      return await repo.getRecommendation(cid, date, commodity: commodity, qty: 10);
+    } else if (repo is MockSlotRepository) {
+      return await repo.getRecommendation(cid, date, commodity: commodity, qty: 10);
+    }
+  } catch (_) {}
+  // Fallback: direct API call using ApiClient if repo type unknown
+  if (auth != null) {
+    try {
+      final client = ref.watch(apiClientProvider);
+      final q = {
+        'date': date.toIso8601String().split('T').first,
+        'estimated_quantity': 10,
+        'commodity_id': commodity,
+        'farmer_id': auth.id,
+      };
+      return await client.get('/api/v1/centres/$cid/slot-recommendations', query: q);
+    } catch (_) {}
+  }
+  return null;
 });
 
 class _SlotTile extends StatelessWidget {

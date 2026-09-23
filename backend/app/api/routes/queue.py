@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.models.user import User
-from app.models.booking import Booking
+from app.models.booking import Booking, BookingStatus
 from app.models.farmer import Farmer
 from app.models.procurement_centre import ProcurementCentre
 from app.models.queue import QueueToken, QueueEvent, QueueStatus
 from app.models.notification import Notification
 from app.schemas.queue import QueueStatusOut, QueueTransitionRequest
 from app.services.queue_service import transition_queue, estimate_wait
+from app.services.scheduling_service import calculate_wait
 from app.services.notification_service import create_notification
 from app.services.audit_service import log_token_called, log_arrived, log_processing_started, audit
 from app.core.config import get_settings
@@ -81,14 +82,20 @@ def dev_queue_status(centre_id: str, db: Session = Depends(get_db), user: User =
 
 @router.get("/centre/{centre_id}")
 def list_centre_queue(centre_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Operator or any authenticated can view centre queue — exclude cancelled/completed/no_show to keep queue clean
+    # Operator queue shows only current date queue (today's bookings) — exclude past dates
+    from datetime import date as _date
+    today = _date.today()
     tokens = db.query(QueueToken).filter(QueueToken.centre_id==centre_id, QueueToken.status.notin_([QueueStatus.CANCELLED.value, QueueStatus.NO_SHOW.value, QueueStatus.COMPLETED.value])).order_by(QueueToken.position).all()
-    # Join booking info
+    # Join booking info and filter to today's date only
     out=[]
     for t in tokens:
         booking = db.get(Booking, t.booking_id)
+        if not booking or booking.date != today:
+            continue
+        if booking.status == BookingStatus.CANCELLED.value:
+            continue
         farmer = db.get(Farmer, booking.farmer_id) if booking else None
-        out.append({"token_number": t.token_number, "position": t.position, "status": t.status, "booking_id": t.booking_id, "farmer_name": farmer.full_name if farmer else None, "commodity": booking.commodity_name if booking else None, "quantity": booking.estimated_quantity if booking else None, "created_at": t.created_at.isoformat() if t.created_at else None})
+        out.append({"token_number": t.token_number, "position": t.position, "status": t.status, "booking_id": t.booking_id, "farmer_name": farmer.full_name if farmer else None, "commodity": booking.commodity_name if booking else None, "quantity": booking.estimated_quantity if booking else None, "created_at": t.created_at.isoformat() if t.created_at else None, "date": str(booking.date)})
     return out
 
 def _get_token_for_booking(db: Session, booking_id: str, user: User) -> QueueToken:
@@ -105,6 +112,108 @@ def _get_token_for_booking(db: Session, booking_id: str, user: User) -> QueueTok
     if not qt:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Queue token not found"})
     return qt
+
+@router.get("/correction/{booking_id}")
+def get_queue_correction(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Deterministic queue correction: PROCESSING excluded, gap >2 = missed call, fraud flags."""
+    qt = _get_token_for_booking(db, booking_id, user)
+    booking = db.get(Booking, booking_id)
+    centre = db.get(ProcurementCentre, qt.centre_id)
+    # corrected farmersAhead: exclude PROCESSING (WAITING/CALLED/ARRIVED only)
+    corrected = db.query(QueueToken).filter(
+        QueueToken.centre_id == qt.centre_id,
+        QueueToken.position < qt.position,
+        QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value])
+    ).count()
+    naive = db.query(QueueToken).filter(
+        QueueToken.centre_id == qt.centre_id,
+        QueueToken.position < qt.position,
+        QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value, QueueStatus.PROCESSING.value])
+    ).count()
+    avg = centre.avg_processing_minutes if centre else 3
+    counters = centre.active_counters if centre and centre.active_counters else 3
+    est_corrected = calculate_wait(corrected, avg, counters)
+    est_naive = calculate_wait(naive, avg, counters)
+    correction_applied = corrected != naive
+    # position gap detection: missing ordinal gap >2 indicates missed call / skipped token
+    ahead_tokens = db.query(QueueToken).filter(QueueToken.centre_id == qt.centre_id, QueueToken.position < qt.position).order_by(QueueToken.position).all()
+    gap_flag = False
+    max_gap = 0
+    if ahead_tokens:
+        positions = sorted([t.position for t in ahead_tokens])
+        for i in range(1, len(positions)):
+            gap = positions[i] - positions[i-1] - 1
+            if gap > max_gap:
+                max_gap = gap
+            if gap > 2:
+                gap_flag = True
+        last_gap = qt.position - positions[-1] - 1
+        if last_gap > max_gap:
+            max_gap = last_gap
+        if last_gap > 2:
+            gap_flag = True
+    else:
+        max_gap = 0
+    # also if naive - corrected >2 (many PROCESSING ahead not counted) we could flag but keep gap_flag primary
+    # fraud flags
+    fraud_flags: dict = {}
+    duplicate_risk = False
+    if booking:
+        # cross-centre duplicate same farmer same date (other bookings)
+        cross = db.query(Booking).filter(
+            Booking.farmer_id == booking.farmer_id,
+            Booking.status == BookingStatus.CONFIRMED.value,
+            Booking.date == booking.date,
+            Booking.id != booking.id
+        ).first()
+        if cross:
+            fraud_flags["cross_centre_duplicate"] = True
+            fraud_flags["cross_centre_token"] = cross.token_number
+            fraud_flags["cross_centre_id"] = cross.centre_id
+            duplicate_risk = True
+        farmer = db.get(Farmer, booking.farmer_id)
+        if farmer:
+            others = db.query(Farmer).filter(Farmer.mobile == farmer.mobile, Farmer.id != farmer.id).all()
+            for other in others:
+                dup = db.query(Booking).filter(
+                    Booking.farmer_id == other.id,
+                    Booking.status == BookingStatus.CONFIRMED.value,
+                    Booking.date == booking.date
+                ).first()
+                if dup:
+                    fraud_flags["mobile_duplicate"] = True
+                    fraud_flags["duplicate_mobile"] = farmer.mobile
+                    fraud_flags["duplicate_farmer_id"] = other.farmer_id
+                    fraud_flags["duplicate_token"] = dup.token_number
+                    duplicate_risk = True
+                    break
+    return {
+        "booking_id": booking_id,
+        "token_number": qt.token_number,
+        "queue_position": qt.position,
+        "farmers_ahead_corrected": corrected,
+        "farmers_ahead_naive": naive,
+        "farmers_ahead": corrected,
+        "farmersAhead": corrected,
+        "farmersAheadCorrected": corrected,
+        "farmersAheadNaive": naive,
+        "estimated_wait_corrected": est_corrected,
+        "estimated_wait_naive": est_naive,
+        "estimatedWaitCorrected": est_corrected,
+        "correction_applied": correction_applied,
+        "correctionApplied": correction_applied,
+        "queueCorrectionNote": "Queue position calculated from database, PROCESSING not counted as ahead",
+        "correction_note": "Queue position corrected — processing not counted" if correction_applied else None,
+        "correctionNote": "Queue position corrected — processing not counted" if correction_applied else None,
+        "missed_call_flag": gap_flag,
+        "missedCallFlag": gap_flag,
+        "position_gap": max_gap,
+        "gap": max_gap,
+        "fraud_flags": fraud_flags,
+        "fraudFlags": fraud_flags,
+        "duplicate_risk": duplicate_risk,
+        "duplicateRisk": duplicate_risk,
+    }
 
 @router.get("/{booking_id}", response_model=QueueStatusOut)
 def get_queue_status(booking_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/providers.dart';
 import '../../../models/centre.dart';
 
@@ -11,9 +12,10 @@ class CentresScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final loc = AppLocalizations.of(context)!;
     final centresAsync = ref.watch(_centresProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Procurement Centres')),
+      appBar: AppBar(title: Text(loc.centres)),
       body: centresAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e,s) => ErrorState(message: e.toString(), onRetry: () => ref.invalidate(_centresProvider)),
@@ -67,7 +69,10 @@ class _CentreCard extends StatelessWidget {
         const SizedBox(height: 8),
         Wrap(spacing:6, children: centre.commodities.map((e) => Chip(label: Text(e, style: const TextStyle(fontSize:11)), visualDensity: VisualDensity.compact, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)).toList()),
         const SizedBox(height: 12),
-        SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.calendar_today, size:18), label: const Text('VIEW SLOTS'), onPressed: () => context.push('/slots?centreId=${centre.id}&centreName=${Uri.encodeComponent(centre.name)}'))),
+        Builder(builder: (ctx) {
+          final l = AppLocalizations.of(ctx)!;
+          return SizedBox(width: double.infinity, child: ElevatedButton.icon(icon: const Icon(Icons.calendar_today, size:18), label: Text(l.viewSlots), onPressed: () => context.push('/slots?centreId=${centre.id}&centreName=${Uri.encodeComponent(centre.name)}')));
+        }),
       ]),
     );
   }

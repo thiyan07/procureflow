@@ -30,6 +30,8 @@ class AppTheme {
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: true,
+      iconTheme: IconThemeData(color: textPrimary),
+      actionsIconTheme: IconThemeData(color: textPrimary),
       titleTextStyle: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w600,
@@ -81,6 +83,8 @@ class AppTheme {
         borderSide: const BorderSide(color: primaryGreen, width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      suffixIconColor: textSecondary,
+      prefixIconColor: textSecondary,
     ),
     chipTheme: ChipThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

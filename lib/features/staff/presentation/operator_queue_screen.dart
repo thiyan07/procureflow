@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_error.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/providers.dart';
 import '../../../core/config/demo_config.dart';
 import '../../../models/booking.dart';
@@ -23,18 +25,31 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
     final cid = GoRouterState.of(context).uri.queryParameters['centreId'];
     if(cid!=null) _centreId=cid;
   }
+  List<QueueStatus> _allowed(String current){
+    switch(current.toUpperCase()){
+      case 'WAITING': return [QueueStatus.called, QueueStatus.cancelled];
+      case 'CALLED': return [QueueStatus.arrived, QueueStatus.noShow, QueueStatus.cancelled];
+      case 'ARRIVED': return [QueueStatus.processing, QueueStatus.cancelled];
+      case 'PROCESSING': return [QueueStatus.completed, QueueStatus.cancelled];
+      case 'ON_HOLD': return [QueueStatus.waiting, QueueStatus.cancelled];
+      default: return [QueueStatus.cancelled];
+    }
+  }
   Future<void> _callNext() async{
     try{
       await ref.read(queueRepositoryProvider).callNext(_centreId);
+      ref.read(queueRefreshProvider.notifier).state++;
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Called next farmer')));
       setState((){});
-    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e)))); }
   }
   Future<void> _updateBooking(String id, QueueStatus s) async{
     try{
       await ref.read(queueRepositoryProvider).updateQueueStatus(id, s);
+      ref.read(queueRefreshProvider.notifier).state++;
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Updated to ${s.name}')));
       setState((){});
-    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    }catch(e){ if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e)))); }
   }
   Future<void> _recordWeighment(String bookingId) async{
     final ctrl = TextEditingController();
@@ -85,10 +100,16 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
   }
   @override
   Widget build(BuildContext context){
+    final loc = AppLocalizations.of(context)!;
     if(DemoConfig.useMockBackend){
       final bookings = MockDatabase.instance.bookings.values.toList();
       return Scaffold(
-        appBar: AppBar(title: const Text('Current Queue (Mock)')),
+        appBar: AppBar(title: Text('${loc.todayQueue} (Mock)'), actions: [
+          IconButton(icon: const Icon(Icons.qr_code_scanner), tooltip: 'Scan QR → Arrived', onPressed: () async {
+            final ok = await context.push('/operator/scan');
+            if (ok == true) setState((){});
+          }),
+        ]),
         body: bookings.isEmpty? const Center(child: Text('No bookings')) : ListView.separated(padding: const EdgeInsets.all(12), itemCount: bookings.length, separatorBuilder: (_,__)=> const SizedBox(height:8), itemBuilder: (c,i){
           final b = bookings[i];
           return AppCard(child: Row(children:[
@@ -99,7 +120,10 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
               Text('${b.centreName} • ${b.queueStatus.name}', style: TextStyle(fontSize:12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               Text('Qty: ${b.quantityQuintal} quintal', style: TextStyle(fontSize:11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
-            PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(b.id,s), itemBuilder: (_)=> QueueStatus.values.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), child: const Icon(Icons.more_vert)),
+              Builder(builder: (cntx){
+                final allowed = _allowed(b.queueStatus.name);
+                return PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(b.id,s), itemBuilder: (_)=> allowed.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), icon: const Icon(Icons.more_vert, color: Color(0xFF5F6368)));
+              }),
           ]));
         }),
         floatingActionButton: FloatingActionButton.extended(onPressed: _callNext, icon: const Icon(Icons.campaign), label: const Text('Call Next')),
@@ -107,7 +131,12 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
     }
     final queueRepo = ref.read(queueRepositoryProvider) as ApiQueueRepository;
     return Scaffold(
-      appBar: AppBar(title: Text('Current Queue • $_centreId')),
+      appBar: AppBar(title: Text('${loc.todayQueue} • $_centreId'), actions: [
+        IconButton(icon: const Icon(Icons.qr_code_scanner), tooltip: 'Scan QR → Arrived', onPressed: () async {
+          final ok = await context.push('/operator/scan');
+          if (ok == true) setState((){});
+        }),
+      ]),
       body: FutureBuilder<List<Map<String,dynamic>>>(
         future: queueRepo.getCentreQueue(_centreId),
         builder: (context, snap){
@@ -133,7 +162,13 @@ class _OperatorQueueScreenState extends ConsumerState<OperatorQueueScreen>{
               ])),
               IconButton(icon: const Icon(Icons.scale, size:18, color: Color(0xFF2E7D32)), tooltip: 'Weighment', onPressed: ()=> _recordWeighment(bookingId)),
               IconButton(icon: const Icon(Icons.verified, size:18, color: Color(0xFF6A1B9A)), tooltip: 'Quality', onPressed: ()=> _recordQuality(bookingId)),
-              PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(bookingId,s), itemBuilder: (_)=> QueueStatus.values.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), child: const Icon(Icons.more_vert)),
+              IconButton(icon: const Icon(Icons.payments, size:18, color: Color(0xFF2E7D32)), tooltip: 'Mark Paid (Complete Payment)', onPressed: () async {
+                try{ await ref.read(apiClientProvider).post('/api/v1/payments/$bookingId/status', body:{'status':'COMPLETED'}); ref.read(queueRefreshProvider.notifier).state++; if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment marked COMPLETED'))); setState((){});}catch(e){ if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFriendlyMessage(e)))); }
+              }),
+              Builder(builder: (cntx){
+                final allowed = _allowed(status);
+                return PopupMenuButton<QueueStatus>(onSelected: (s)=> _updateBooking(bookingId,s), itemBuilder: (_)=> allowed.map((e)=> PopupMenuItem(value:e, child: Text(e.name))).toList(), icon: const Icon(Icons.more_vert, color: Color(0xFF5F6368)));
+              }),
             ]));
           });
         },

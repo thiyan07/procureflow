@@ -3,6 +3,7 @@ import 'repositories.dart';
 import 'mock/mock_repositories.dart';
 import '../core/network/api_client.dart';
 import '../core/config/demo_config.dart';
+import '../core/storage/local_storage.dart';
 import 'api/api_auth_repository.dart';
 import 'api/api_farmer_repository.dart';
 import 'api/api_centre_repository.dart';
@@ -28,8 +29,17 @@ final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => _useMock 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) => _useMock ? MockNotificationRepository() : ApiNotificationRepository(ref.watch(apiClientProvider)));
 final aiRepositoryProvider = Provider<AIRepository>((ref) => _useMock ? MockAIRepository() : ApiAiRepository(ref.watch(apiClientProvider)));
 
-// Language provider
-final languageCodeProvider = StateProvider<String>((ref) => 'en');
+// Language provider — reads persisted value after LocalStorage.init()
+final languageCodeProvider = StateProvider<String>((ref) {
+  try {
+    return LocalStorage.instance.languageCode;
+  } catch (_) {
+    return 'en';
+  }
+});
+
+// Queue refresh trigger — increment after operator Call Next / transition to force dashboard/farmer refresh
+final queueRefreshProvider = StateProvider<int>((ref) => 0);
 
 // Auth state
 final authStateProvider = FutureProvider((ref) async {

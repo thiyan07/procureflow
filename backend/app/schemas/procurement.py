@@ -6,12 +6,18 @@ class ProcurementOut(BaseModel):
     id: str
     booking_id: str
     stage: str
+    approval_status: str = "NONE"
+    pending_stage: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
 
 class ProcurementAdvanceRequest(BaseModel):
     to_stage: str
+
+class ProcurementApproveRequest(BaseModel):
+    stage: str
+    role: Optional[str] = None
 
 class TimelineStepOut(BaseModel):
     title: str
@@ -30,3 +36,17 @@ class QualityCheckOut(BaseModel):
     moisture_percent: Optional[float] = None
     remarks: Optional[str] = None
     checked_at: Optional[datetime] = None
+
+class ComplianceCheckRequest(BaseModel):
+    question: str
+    answer: str
+
+class ComplianceCheckResponse(BaseModel):
+    verified: bool
+    generated_justification: str
+    reason: str
+    booking_id: str
+    commodity: str
+    quantity: float
+    grade: Optional[str] = None
+    moisture: Optional[float] = None

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/providers.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../models/booking.dart';
 import '../../../models/payment.dart';
 import '../../../core/storage/local_storage.dart';
@@ -49,8 +50,9 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
 
   @override
   Widget build(BuildContext context){
+    final loc = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('AI Assistant')),
+      appBar: AppBar(title: Text(loc.assistant)),
       body: Column(children:[
         Expanded(child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: _msgs.length, itemBuilder: (c,i){
           final m = _msgs[i];
@@ -67,7 +69,7 @@ class _AssistantScreenState extends ConsumerState<AssistantScreen> {
         })),
         if (_loading) const LinearProgressIndicator(),
         Padding(padding: const EdgeInsets.all(12), child: Row(children:[
-          Expanded(child: TextField(controller: _ctrl, decoration: InputDecoration(hintText: 'Ask: Where is my token?', suffixIcon: IconButton(icon: const Icon(Icons.send), onPressed: _send)), onSubmitted: (_)=> _send())),
+          Expanded(child: TextField(controller: _ctrl, decoration: InputDecoration(hintText: loc.howCanIHelp, suffixIcon: IconButton(icon: const Icon(Icons.send), onPressed: _send)), onSubmitted: (_)=> _send())),
           const SizedBox(width:8),
           FloatingActionButton.small(onPressed: _send, child: const Icon(Icons.send)),
         ])),

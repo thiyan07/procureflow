@@ -20,11 +20,68 @@ Lower score = better. But we return ranking where lower is more recommended.
 We implement deterministic weights and tie-breaking by start_time.
 """
 from datetime import datetime, date, time, timezone
+import math
 from typing import List, Optional, Tuple
 
 from app.core.config import get_settings
 
 settings = get_settings()
+
+# Farmer village/district approximate coordinates (deterministic, no external APIs)
+# Centroids for Tamil Nadu districts + village aliases used in seed data.
+DISTRICT_COORDS: dict[str, tuple[float, float]] = {
+    "erode": (11.3400, 77.7172),
+    "coimbatore": (11.0168, 76.9558),
+    "tiruppur": (11.1085, 77.3411),
+    "salem": (11.6643, 78.1460),
+    "namakkal": (11.2189, 78.1679),
+    "karur": (10.9602, 78.0766),
+    "dharmapuri": (12.1278, 78.1582),
+    "nilgiris": (11.4102, 76.7037),
+    "dindigul": (10.3673, 77.9803),
+    "trichy": (10.7905, 78.7047),
+    "tiruchirappalli": (10.7905, 78.7047),
+    "madurai": (9.9252, 78.1198),
+    "chennai": (13.0827, 80.2707),
+    # village-level overrides from seed / mock DB (approx to nearest centre)
+    "bhavani": (11.4475, 77.6815),
+    "kavindapadi": (11.4480, 77.6820),
+    "kanjikoil": (11.2760, 77.5860),
+    "perundurai": (11.2760, 77.5860),
+    "sathyamangalam": (11.5054, 77.2380),
+    "sathy": (11.5054, 77.2380),
+    "gobichettipalayam": (11.4536, 77.4383),
+    "gobi": (11.4536, 77.4383),
+    "thindal": (11.3400, 77.7172),
+    "erode firka": (11.3400, 77.7172),
+}
+
+
+def haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in km between two lat/lng points, deterministic."""
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    c = 2 * math.asin(math.sqrt(a))
+    return r * c
+
+
+def get_farmer_coords(district: str | None, village: str | None) -> tuple[float, float] | None:
+    """Resolve farmer approx coords from village then district; deterministic fallback."""
+    # village first (more specific)
+    for key in [village or "", district or ""]:
+        if not key:
+            continue
+        k = key.strip().lower()
+        # direct match
+        if k in DISTRICT_COORDS:
+            return DISTRICT_COORDS[k]
+        # substring match (e.g. "Kavindapadi (Bhavani Firka)" contains "kavindapadi")
+        for coord_key, coords in DISTRICT_COORDS.items():
+            if coord_key in k or k in coord_key:
+                return coords
+    return DISTRICT_COORDS.get("erode")
 
 class SlotCandidate:
     def __init__(self, slot, centre):
@@ -41,8 +98,34 @@ def compute_scheduling(slot_candidates: List[SlotCandidate],
                        target_date: date,
                        commodity: str,
                        estimated_quantity: float,
-                       now: Optional[datetime] = None) -> List[SlotCandidate]:
+                       now: Optional[datetime] = None,
+                       farmer_past_count: int = 0,
+                       farmer_distance_km: Optional[float] = None,
+                       farmer_commodity_match: bool = False) -> List[SlotCandidate]:
     now = now or datetime.now(timezone.utc)
+    # Pre-compute farmer boost multiplicative factor (deterministic, <1 is boost)
+    farmer_boost = 1.0
+    if farmer_past_count >= 3:
+        farmer_boost *= 0.80
+    elif farmer_past_count >= 2:
+        farmer_boost *= 0.85
+    elif farmer_past_count >= 1:
+        farmer_boost *= 0.90
+    if farmer_commodity_match:
+        farmer_boost *= 0.92
+    distance_factor = 1.0
+    if farmer_distance_km is not None:
+        if farmer_distance_km < 15:
+            distance_factor = 0.90
+        elif farmer_distance_km < 30:
+            distance_factor = 0.95
+        elif farmer_distance_km < 50:
+            distance_factor = 0.98
+        elif farmer_distance_km > 80:
+            distance_factor = 1.08
+        else:
+            distance_factor = 1.02
+        farmer_boost *= distance_factor
     # Filter.
     for cand in slot_candidates:
         slot = cand.slot
@@ -105,7 +188,9 @@ def compute_scheduling(slot_candidates: List[SlotCandidate],
         else:
             buffer_penalty = 1.0
 
-        cand.score = availability_score * congestion_score * load_score * time_score * buffer_penalty
+        base_score = availability_score * congestion_score * load_score * time_score * buffer_penalty
+        # farmer-aware boost (lower score = better)
+        cand.score = base_score * farmer_boost
         cand.debug = {
             "availability": round(availability_score, 3),
             "congestion": round(congestion_score, 3),
@@ -113,6 +198,12 @@ def compute_scheduling(slot_candidates: List[SlotCandidate],
             "load": round(load_score, 3),
             "time_pref": round(time_score, 3),
             "buffer_penalty": round(buffer_penalty, 3),
+            "base_score": round(base_score, 4),
+            "farmer_boost": round(farmer_boost, 3),
+            "farmer_past_count": farmer_past_count,
+            "farmer_distance_km": round(farmer_distance_km, 1) if farmer_distance_km is not None else None,
+            "farmer_commodity_match": farmer_commodity_match,
+            "distance_factor": round(distance_factor, 3) if farmer_distance_km is not None else 1.0,
             "score": round(cand.score, 4),
             "available": available,
             "booked": slot.booked,
@@ -127,6 +218,17 @@ def compute_scheduling(slot_candidates: List[SlotCandidate],
             cand.reason = "Higher load — consider alternative slot."
         if estimated_quantity > 20:
             cand.reason += " Large quantity considered."
+        # Farmer-aware personalized suffix (deterministic, shown in UI chip)
+        if farmer_past_count > 0 or farmer_commodity_match or (farmer_distance_km is not None and farmer_distance_km < 30):
+            parts = []
+            if farmer_past_count > 0:
+                parts.append(f"past {farmer_past_count} booking{'s' if farmer_past_count!=1 else ''} at {centre.name.split(' - ')[-1] if ' - ' in centre.name else centre.name}")
+            if farmer_commodity_match:
+                parts.append(f"{commodity} match")
+            if farmer_distance_km is not None and farmer_distance_km < 30:
+                parts.append(f"{round(farmer_distance_km,1)} km away")
+            if parts:
+                cand.reason += " Recommended for you (" + ", ".join(parts) + ")."
 
     eligible = [c for c in slot_candidates if c.eligible]
     # Sort by score ascending, then start_time deterministic tie-break, then id

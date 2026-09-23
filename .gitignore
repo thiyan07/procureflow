@@ -56,3 +56,8 @@ firebase-service-account.json
 google-services.json
 *.jks
 *.keystore
+
+# Playwright & temp
+.playwright-mcp/
+copy.txt
+*.tmp

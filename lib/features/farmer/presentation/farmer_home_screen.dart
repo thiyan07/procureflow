@@ -8,15 +8,17 @@ import '../../../core/config/demo_config.dart';
 import '../../../services/providers.dart';
 import '../../../models/booking.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../l10n/app_localizations.dart';
 
 class FarmerHomeScreen extends ConsumerWidget {
   const FarmerHomeScreen({super.key});
 
-  String greeting() {
+  String greeting(BuildContext context, String name) {
+    final loc = AppLocalizations.of(context)!;
     final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+    if (h < 12) return loc.goodMorning(name);
+    if (h < 17) return loc.goodAfternoon(name);
+    return loc.goodEvening(name);
   }
 
   @override
@@ -50,7 +52,7 @@ class FarmerHomeScreen extends ConsumerWidget {
                 ]),
               ),
               const SizedBox(height: 12),
-              Text('${greeting()}, $name 👋', style: Theme.of(context).textTheme.headlineMedium),
+              Text(greeting(context, name), style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 4),
               Text(farmer != null ? '${farmer.village}, ${farmer.district} • ${farmer.primaryCommodity}' : '', style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 16),
@@ -61,14 +63,15 @@ class FarmerHomeScreen extends ConsumerWidget {
                   error: (e,s) => Card(child: Padding(padding: const EdgeInsets.all(16), child: Text('Error: $e'))),
                   data: (booking) {
                     if (booking == null) {
+                      final loc = AppLocalizations.of(context)!;
                       return AppCard(child: Column(children: [
                         const Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
                         const SizedBox(height: 12),
-                        Text('No active procurement booking', style: Theme.of(context).textTheme.titleMedium),
+                        Text(loc.noActiveBooking, style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 4),
-                        const Text('Book a slot at your nearest centre to get a token.', textAlign: TextAlign.center),
+                        Text(loc.bookASlot, textAlign: TextAlign.center),
                         const SizedBox(height: 16),
-                        PrimaryButton(label: 'Book a Slot', icon: Icons.calendar_today, onPressed: () => context.push('/centres')),
+                        PrimaryButton(label: loc.bookSlot, icon: Icons.calendar_today, onPressed: () => context.push('/centres')),
                       ]));
                     }
                     return _ActiveBookingCard(booking: booking);
@@ -76,20 +79,25 @@ class FarmerHomeScreen extends ConsumerWidget {
                 );
               }),
               const SizedBox(height: 16),
-              Text('Quick Actions', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              GridView.count(
-                crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 2.2,
-                children: [
-                  _ActionCard(icon: Icons.store, label: 'Book Slot', color: AppTheme.primaryGreen, onTap: () => context.push('/centres')),
-                  _ActionCard(icon: Icons.confirmation_number, label: 'My Token', color: const Color(0xFF1565C0), onTap: () => context.push('/token')),
-                  _ActionCard(icon: Icons.event_note, label: 'Day Planner', color: const Color(0xFF00838F), onTap: () => context.push('/planner')),
-                  _ActionCard(icon: Icons.history, label: 'History', color: const Color(0xFF4E342E), onTap: () => context.push('/history')),
-                  _ActionCard(icon: Icons.timeline, label: 'Procurement', color: const Color(0xFF6A1B9A), onTap: () => context.push('/procurement')),
-                  _ActionCard(icon: Icons.payments_outlined, label: 'Payment', color: const Color(0xFFEF6C00), onTap: () => context.push('/payment')),
-                ],
-              ),
+              Builder(builder: (ctx){
+                final loc=AppLocalizations.of(ctx)!;
+                return Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
+                  Text(loc.centres, style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  GridView.count(
+                    crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: 2.2,
+                    children: [
+                      _ActionCard(icon: Icons.store, label: loc.bookSlot, color: AppTheme.primaryGreen, onTap: () => context.push('/centres')),
+                      _ActionCard(icon: Icons.confirmation_number, label: loc.myToken, color: const Color(0xFF1565C0), onTap: () => context.push('/token')),
+                      _ActionCard(icon: Icons.event_note, label: loc.myProcurementDay, color: const Color(0xFF00838F), onTap: () => context.push('/planner')),
+                      _ActionCard(icon: Icons.history, label: loc.booking, color: const Color(0xFF4E342E), onTap: () => context.push('/history')),
+                      _ActionCard(icon: Icons.timeline, label: loc.procurement, color: const Color(0xFF6A1B9A), onTap: () => context.push('/procurement')),
+                      _ActionCard(icon: Icons.payments_outlined, label: loc.payment, color: const Color(0xFFEF6C00), onTap: () => context.push('/payment')),
+                    ],
+                  ),
+                ]);
+              }),
               const SizedBox(height: 16),
               AppCard(
                 onTap: () => context.push('/assistant'),
@@ -100,7 +108,7 @@ class FarmerHomeScreen extends ConsumerWidget {
                     const Text('AI Assistant', style: TextStyle(fontWeight: FontWeight.w600)),
                     Text('Ask: Where is my token?', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ])),
-                  const Icon(Icons.chevron_right),
+                  const Icon(Icons.chevron_right, color: Color(0xFF5F6368)),
                 ]),
               ),
             ]),
@@ -188,6 +196,7 @@ class _ActiveBookingCard extends ConsumerWidget {
 }
 
 final _queueProvider = FutureProvider.family<QueueState, String>((ref, bookingId) async {
+  ref.watch(queueRefreshProvider);
   final repo = ref.watch(queueRepositoryProvider);
   return repo.getQueueStatus(bookingId);
 });
@@ -215,7 +224,7 @@ class _ActionCard extends StatelessWidget {
       Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withValues(alpha:0.12), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color)),
       const SizedBox(width: 10),
       Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
-      const Icon(Icons.chevron_right, size: 18, color: Colors.black26),
+      const Icon(Icons.chevron_right, size: 20, color: Color(0xFF5F6368)),
     ]));
   }
 }
