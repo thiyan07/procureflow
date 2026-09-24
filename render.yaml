@@ -14,10 +14,12 @@ services:
     rootDir: backend
     healthCheckPath: /health
     buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: alembic upgrade head || echo "alembic failed, continuing" && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        value: sqlite:////tmp/procureflow.db
+        fromDatabase:
+          name: procureflow-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: ENVIRONMENT

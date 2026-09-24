@@ -63,22 +63,24 @@ class ApiClient {
     return 'Request failed (${res.statusCode})';
   }
 
-  // Render free cold start ~50s, so use 45s timeout + 1 retry + friendly error
+  // Render free cold start can be 60-120s on first wake, so use 60s + 2 retries
   Future<http.Response> _withRetry(Future<http.Response> Function() fn) async {
-    try {
-      return await fn().timeout(const Duration(seconds: 45));
-    } on Exception catch (e) {
-      // retry once after 2s for cold start; if still fails, convert to HttpException with friendly message
+    for (int attempt = 0; attempt < 3; attempt++) {
       try {
-        await Future.delayed(const Duration(seconds: 2));
-        return await fn().timeout(const Duration(seconds: 45));
-      } on Exception catch (e2) {
-        final msg = e2.toString().contains('TimeoutException') || e.toString().contains('TimeoutException')
-            ? 'Server waking up (Render free tier cold start). Please wait 30-60s and retry. If still failing, check https://procureflow-api.onrender.com/health'
-            : 'Network error: $e2';
+        return await fn().timeout(const Duration(seconds: 60));
+      } on Exception catch (e) {
+        final isTimeout = e.toString().contains('TimeoutException');
+        if (attempt < 2 && isTimeout) {
+          await Future.delayed(Duration(seconds: 4 * (attempt + 1)));
+          continue;
+        }
+        final msg = isTimeout
+            ? 'Server waking up (Render free tier cold start — can take 2-3 min on first request). Please wait 30s and tap Login again. Check https://procureflow-api.onrender.com/health'
+            : 'Network error: $e';
         throw HttpException(msg);
       }
     }
+    throw HttpException('Server waking up — please retry in 30s');
   }
 
   Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query, bool auth = true}) async {
