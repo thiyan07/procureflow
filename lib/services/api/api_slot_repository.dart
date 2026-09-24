@@ -88,7 +88,18 @@ class ApiSlotRepository implements SlotRepository {
       body['commodities'] = commodities.map((c)=> {'commodity': c.commodity, 'quantity': c.quantity, 'unit': c.unit}).toList();
     }
     final res = await _client.post('/api/v1/bookings', body: body);
-    return _mapBooking(res);
+    final booking = _mapBooking(res);
+    // immediately cache new booking so refresh never makes it vanish
+    try {
+      final existingCached = LocalStorage.instance.cachedBooking;
+      List<dynamic> list = [];
+      if (existingCached != null) {
+        try { list = jsonDecode(existingCached) as List; } catch (_) {}
+      }
+      list.insert(0, res);
+      await LocalStorage.instance.cacheBooking(jsonEncode(list));
+    } catch (_) {}
+    return booking;
   }
 
   Booking _mapBooking(Map<String, dynamic> j) {
@@ -138,8 +149,38 @@ class ApiSlotRepository implements SlotRepository {
 
   @override
   Future<List<Booking>> getBookingsForFarmer(String farmerId) async {
-    final list = await _client.getList('/api/v1/bookings');
-    return list.map((e) => _mapBooking(e as Map<String, dynamic>)).toList();
+    try {
+      final list = await _client.getList('/api/v1/bookings');
+      final bookings = list.map((e) => _mapBooking(e as Map<String, dynamic>)).toList();
+      // cache for offline refresh — never vanishes on transient network error
+      try {
+        final jsonStr = jsonEncode(list);
+        await LocalStorage.instance.cacheBooking(jsonStr);
+      } catch (_) {}
+      return bookings;
+    } catch (e) {
+      // fallback to cached bookings if network fails (fixes "vanishes on refresh")
+      final cached = LocalStorage.instance.cachedBooking;
+      if (cached != null) {
+        try {
+          final decoded = jsonDecode(cached) as List;
+          return decoded.map((x) => _mapBooking(x as Map<String, dynamic>)).toList();
+        } catch (_) {}
+      }
+      // if no cache, rethrow with user-friendly message
+      throw Exception(_userFriendly(e));
+    }
+  }
+
+  String _userFriendly(Object e) {
+    final s = e.toString();
+    if (s.contains('SocketException') || s.contains('Connection refused') || s.contains('Failed host lookup')) {
+      return 'Network error — check internet or server. Booking is cached and will sync when online.';
+    }
+    if (s.contains('TimeoutException') || s.contains('Server waking up')) {
+      return s.contains('Server waking up') ? s : 'Server waking up (cold start) — please retry in 30s';
+    }
+    return s;
   }
 
   @override

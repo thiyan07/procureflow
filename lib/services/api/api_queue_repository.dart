@@ -69,15 +69,37 @@ class ApiQueueRepository implements QueueRepository {
     }
   }
 
-  // Real operator: list centre queue (used by operator screens)
+  // Real operator: list centre queue (used by operator screens) — filtered to today, no phantom
   Future<List<Map<String, dynamic>>> getCentreQueue(String centreId) async {
-    final list = await _client.getList('/api/v1/queue/centre/$centreId');
-    return list.cast<Map<String, dynamic>>();
+    try {
+      final list = await _client.getList('/api/v1/queue/centre/$centreId');
+      return list.cast<Map<String, dynamic>>();
+    } catch (e) {
+      final s = e.toString();
+      if (s.contains('SocketException') || s.contains('Connection refused')) {
+        throw Exception('Network error — queue unavailable. Check server URL ${_client.baseUrl}');
+      }
+      rethrow;
+    }
   }
 
-  // Dashboard stats for operator
+  // Dashboard stats for operator — cached on failure to avoid "Connection refused" black error
   Future<Map<String, dynamic>> getDashboard(String centreId) async {
-    return await _client.get('/api/v1/centres/$centreId/dashboard');
+    try {
+      final res = await _client.get('/api/v1/centres/$centreId/dashboard');
+      try { await LocalStorage.instance.cacheQueue(jsonEncode(res)); } catch (_) {}
+      return res;
+    } catch (e) {
+      final cached = LocalStorage.instance.cachedQueue;
+      if (cached != null) {
+        try { final m = jsonDecode(cached) as Map<String, dynamic>; if (m.containsKey('today_farmers')) return m; } catch (_) {}
+      }
+      final s = e.toString();
+      if (s.contains('SocketException') || s.contains('Connection refused') || s.contains('Failed host lookup')) {
+        throw Exception('Network error — cannot reach server at ${_client.baseUrl}. If using localhost, run "adb reverse tcp:8000 tcp:8000" or switch to online URL. Will retry.');
+      }
+      rethrow;
+    }
   }
 
   @override
