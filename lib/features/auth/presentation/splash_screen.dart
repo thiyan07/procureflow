@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/config/demo_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/providers.dart';
 import '../../../core/network/api_client.dart';
@@ -124,12 +123,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             const SizedBox(height: 12),
             Text(_warmStatus, style: TextStyle(color: Colors.white70, fontSize: 11)),
             const SizedBox(height: 68),
-            if (DemoConfig.isDemoMode)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
-                child: const Text('DEMO MODE • phone+password', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
-              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+              child: const Text('LIVE • TNCSC • phone+password', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+            ),
           ],
         ),
       ),

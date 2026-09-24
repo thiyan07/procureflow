@@ -36,7 +36,11 @@ abstract class FarmerRepository {
 
 abstract class CentreRepository {
   Future<List<ProcurementCentre>> getCentres();
+  Future<List<ProcurementCentre>> getNearbyCentres({double? lat, double? lng, double radiusKm = 20, String? commodity, String? district});
   Future<ProcurementCentre> getCentre(String id);
+  Future<List<Map<String, dynamic>>> getCentreCommodities(String centreId);
+  Future<Map<String, dynamic>> getCentreOperational(String centreId, {double? lat, double? lng});
+  Future<Map<String, dynamic>> getRecommendations({double? lat, double? lng, double radiusKm = 50, String? commodity, String? district, double estimatedQuantity = 10});
 }
 
 abstract class SlotRepository {

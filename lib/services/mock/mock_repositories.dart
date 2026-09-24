@@ -170,9 +170,82 @@ class MockCentreRepository implements CentreRepository {
   }
 
   @override
+  Future<List<ProcurementCentre>> getNearbyCentres({double? lat, double? lng, double radiusKm = 20, String? commodity, String? district}) async {
+    await Future.delayed(AppConstants.mockDelay);
+    var list = _db.centres;
+    if (commodity != null && commodity.isNotEmpty) {
+      list = list.where((c) => c.commodities.any((cc) => cc.toLowerCase() == commodity.toLowerCase())).toList();
+    }
+    if (district != null && district.isNotEmpty) {
+      list = list.where((c) => c.district.toLowerCase() == district.toLowerCase()).toList();
+    }
+    return list.map((c) => ProcurementCentre(
+      id: c.id, centreCode: 'MOCK-${c.id}', name: c.name, location: c.location, address: c.location, district: c.district,
+      lat: c.lat, lng: c.lng, phone: '0434-000000', status: c.status,
+      currentQueue: c.currentQueue, estimatedWaitMinutes: c.estimatedWaitMinutes, availableSlots: c.availableSlots, commodities: c.commodities,
+      distanceKm: c.id == 'c1' ? 5.2 : 28.0, dailyCapacity: 200, remainingCapacityToday: 150,
+    )).toList()..sort((a,b) => (a.distanceKm ?? 999).compareTo(b.distanceKm ?? 999));
+  }
+
+  @override
   Future<ProcurementCentre> getCentre(String id) async {
     await Future.delayed(const Duration(milliseconds: 300));
     return _db.centres.firstWhere((c) => c.id == id);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCentreCommodities(String centreId) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return [
+      {'id': 'com_paddy', 'name': 'Paddy', 'code': 'PADDY', 'rate_per_quintal': 2441, 'is_active': true},
+      {'id': 'com_ragi', 'name': 'Ragi', 'code': 'RAGI', 'rate_per_quintal': 1800, 'is_active': true},
+    ];
+  }
+
+  @override
+  Future<Map<String, dynamic>> getCentreOperational(String centreId, {double? lat, double? lng}) async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    final centre = _db.centres.firstWhere((c) => c.id == centreId, orElse: () => _db.centres.first);
+    return {
+      'centre': centre.toJson(),
+      'distance_km': centreId == 'c1' ? 5.2 : 28.0,
+      'status': centre.status,
+      'is_open_now': centre.isOpen,
+      'next_slot': {
+        'id': 'slot_next', 'start_time': DateTime.now().add(const Duration(hours: 1)).toIso8601String(),
+        'end_time': DateTime.now().add(const Duration(hours: 2)).toIso8601String(), 'available': 10,
+      },
+      'capacity': {'daily_capacity': 200, 'booked_today': 50, 'remaining_capacity': 150},
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> getRecommendations({double? lat, double? lng, double radiusKm = 50, String? commodity, String? district, double estimatedQuantity = 10}) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final centres = await getNearbyCentres(lat: lat, lng: lng, radiusKm: radiusKm, commodity: commodity, district: district);
+    final ranked = centres.asMap().entries.map((e) {
+      final i = e.key;
+      final c = e.value;
+      final dist = c.distanceKm ?? (c.id == 'c1' ? 5.2 : 28.0);
+      final score = dist * 0.3 + c.currentQueue * 0.4 + (c.estimatedWaitMinutes / 10);
+      return {
+        'centre': c.toJson(),
+        'score': score + i * 0.1,
+        'distance_km': dist,
+        'queue_size': c.currentQueue,
+        'estimated_wait_minutes': c.estimatedWaitMinutes,
+        'occupancy': 0.35,
+        'remaining_capacity': c.remainingCapacityToday,
+        'available_slots': c.availableSlots,
+        'next_available_slot': {'id': 'slot_next', 'start_time': DateTime.now().add(const Duration(hours: 1)).toIso8601String(), 'available': 10},
+        'status': c.status,
+        'reason': '${dist.toStringAsFixed(1)}km • Queue ${c.currentQueue} • Wait ${c.estimatedWaitMinutes}min • ${c.remainingCapacityToday} slots left • Recommended for you (past 2 bookings at Bhavani)',
+        'is_recommended': i == 0,
+        'debug': {'mock': true},
+      };
+    }).toList();
+    ranked.sort((a, b) => (a['score'] as double).compareTo(b['score'] as double));
+    return {'count': ranked.length, 'ranked': ranked, 'query': {'lat': lat, 'lng': lng, 'radius_km': radiusKm}};
   }
 }
 

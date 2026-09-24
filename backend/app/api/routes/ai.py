@@ -40,8 +40,7 @@ def centre_load(centre_id: str, target_date: date = Query(...), db: Session = De
         hist.append(cnt if cnt > 0 else None)
     # filter Nones for fallback
     hist_clean = [h for h in hist if h is not None]
-    if not hist_clean:
-        hist_clean = None
+    # keep [] if no history to trigger honest fallback (no synthetic hallucination)
     # current queue
     from app.models.queue import QueueToken, QueueStatus
     current_q = db.query(QueueToken).filter(QueueToken.centre_id == centre_id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value])).count()
@@ -120,18 +119,17 @@ def demand_forecast(centre_id: str = Query(None), commodity: str = Query(None), 
                 cnt = cnt.filter(Booking.commodity_name.contains(commodity))
             hist.append(cnt.count())
         avg_hist = sum(hist)/len(hist) if hist else 0
-        # fallback baseline 15-25
+        # 100% real — no synthetic baseline
         if avg_hist < 5:
-            baseline = 18
-            predicted = baseline
-            reason = "Baseline 18 (insufficient history, clearly marked fallback)"
-            confidence = "low"
+            predicted = None
+            reason = "Prediction unavailable — insufficient history"
+            confidence = "insufficient"
         else:
             predicted = int(avg_hist)
             reason = f"Avg {avg_hist:.1f} same weekday past 4 weeks"
             confidence = "medium"
         out.append({"date": d.isoformat(), "predicted_bookings": predicted, "reason": reason, "confidence": confidence, "historical_avg": avg_hist})
-    return {"centre_id": centre_id, "commodity": commodity, "forecast": out, "model_info": "4-week weekday avg fallback baseline 18"}
+    return {"centre_id": centre_id, "commodity": commodity, "forecast": out, "model_info": "4-week weekday avg — real bookings only"}
 
 @router.get("/anomalies/{centre_id}")
 def anomalies(centre_id: str, db: Session = Depends(get_db)):

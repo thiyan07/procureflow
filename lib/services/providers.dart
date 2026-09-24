@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'repositories.dart';
-import 'mock/mock_repositories.dart';
 import '../core/network/api_client.dart';
-import '../core/config/demo_config.dart';
 import '../core/storage/local_storage.dart';
 import 'api/api_auth_repository.dart';
 import 'api/api_farmer_repository.dart';
@@ -17,17 +15,16 @@ import 'api/api_ai_repository.dart';
 // Shared ApiClient
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
-bool get _useMock => DemoConfig.useMockBackend;
-
-final authRepositoryProvider = Provider<AuthRepository>((ref) => _useMock ? MockAuthRepository() : ApiAuthRepository(ref.watch(apiClientProvider)));
-final farmerRepositoryProvider = Provider<FarmerRepository>((ref) => _useMock ? MockFarmerRepository() : ApiFarmerRepository(ref.watch(apiClientProvider)));
-final centreRepositoryProvider = Provider<CentreRepository>((ref) => _useMock ? MockCentreRepository() : ApiCentreRepository(ref.watch(apiClientProvider)));
-final slotRepositoryProvider = Provider<SlotRepository>((ref) => _useMock ? MockSlotRepository() : ApiSlotRepository(ref.watch(apiClientProvider)));
-final queueRepositoryProvider = Provider<QueueRepository>((ref) => _useMock ? MockQueueRepository() : ApiQueueRepository(ref.watch(apiClientProvider)));
-final procurementRepositoryProvider = Provider<ProcurementRepository>((ref) => _useMock ? MockProcurementRepository() : ApiProcurementRepository(ref.watch(apiClientProvider)));
-final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => _useMock ? MockPaymentRepository() : ApiPaymentRepository(ref.watch(apiClientProvider)));
-final notificationRepositoryProvider = Provider<NotificationRepository>((ref) => _useMock ? MockNotificationRepository() : ApiNotificationRepository(ref.watch(apiClientProvider)));
-final aiRepositoryProvider = Provider<AIRepository>((ref) => _useMock ? MockAIRepository() : ApiAiRepository(ref.watch(apiClientProvider)));
+// 100% real — no demo/mocks
+final authRepositoryProvider = Provider<AuthRepository>((ref) => ApiAuthRepository(ref.watch(apiClientProvider)));
+final farmerRepositoryProvider = Provider<FarmerRepository>((ref) => ApiFarmerRepository(ref.watch(apiClientProvider)));
+final centreRepositoryProvider = Provider<CentreRepository>((ref) => ApiCentreRepository(ref.watch(apiClientProvider)));
+final slotRepositoryProvider = Provider<SlotRepository>((ref) => ApiSlotRepository(ref.watch(apiClientProvider)));
+final queueRepositoryProvider = Provider<QueueRepository>((ref) => ApiQueueRepository(ref.watch(apiClientProvider)));
+final procurementRepositoryProvider = Provider<ProcurementRepository>((ref) => ApiProcurementRepository(ref.watch(apiClientProvider)));
+final paymentRepositoryProvider = Provider<PaymentRepository>((ref) => ApiPaymentRepository(ref.watch(apiClientProvider)));
+final notificationRepositoryProvider = Provider<NotificationRepository>((ref) => ApiNotificationRepository(ref.watch(apiClientProvider)));
+final aiRepositoryProvider = Provider<AIRepository>((ref) => ApiAiRepository(ref.watch(apiClientProvider)));
 
 // Language provider — reads persisted value after LocalStorage.init()
 final languageCodeProvider = StateProvider<String>((ref) {

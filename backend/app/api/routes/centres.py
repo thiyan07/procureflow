@@ -48,21 +48,372 @@ def _computed_status(c: ProcurementCentre, db: Session) -> str:
         return "Busy"
     return "Open"
 
+@router.get("/nearby", response_model=list[CentreOut])
+def nearby_centres(
+    lat: float = Query(..., description="Farmer latitude"),
+    lng: float = Query(..., description="Farmer longitude"),
+    radius_km: float = Query(20, ge=0.1, le=500, description="Search radius km"),
+    commodity: str | None = Query(None, description="Filter by commodity name e.g. Paddy"),
+    district: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    # Real data: filter by commodity via M2M, district, distance via haversine, sort by distance
+    q = db.query(ProcurementCentre).filter(ProcurementCentre.is_active == True)
+    if district:
+        q = q.filter(ProcurementCentre.district.ilike(f"%{district}%"))
+    centres = q.all()
+    # Commodity filter via M2M
+    if commodity:
+        from app.models.procurement_centre import centre_commodities
+        from app.models.commodity import Commodity
+        comm = db.query(Commodity).filter(Commodity.name.ilike(commodity)).first()
+        if comm:
+            # filter centres that have this commodity
+            allowed_ids = {r[0] for r in db.query(centre_commodities.c.centre_id).filter(centre_commodities.c.commodity_id == comm.id).all()}
+            centres = [c for c in centres if c.id in allowed_ids]
+        else:
+            # no such commodity -> empty
+            centres = []
+    # Compute distance and filter by radius
+    out = []
+    for c in centres:
+        try:
+            d = haversine(lat, lng, c.lat, c.lng)
+        except Exception:
+            d = 9999
+        if d <= radius_km:
+            c.status = _computed_status(c, db)
+            # attach distance for response
+            c.distance_km = round(d, 2)  # transient, not persisted
+            # supported commodities
+            try:
+                c.supported_commodities = [com.name for com in (c.commodities or [])]
+            except Exception:
+                c.supported_commodities = []
+            # remaining capacity today
+            from datetime import date as _date
+            today = _date.today()
+            slots = db.query(Slot).filter(Slot.centre_id == c.id, Slot.date == today).all()
+            total = sum(s.capacity for s in slots)
+            used = sum(s.booked for s in slots)
+            c.remaining_capacity_today = (total - used) if total else (c.daily_capacity or 120)
+            out.append((d, c))
+        # else skip
+    out.sort(key=lambda x: x[0])
+    result = [c for _, c in out[:limit]]
+    return result
+
 @router.get("", response_model=list[CentreOut])
-def list_centres(db: Session = Depends(get_db)):
-    centres = db.query(ProcurementCentre).filter(ProcurementCentre.is_active == True).all()
-    # Return with computed status (not hardcoded)
+def list_centres(
+    lat: float | None = Query(None, description="Optional farmer lat for distance sort"),
+    lng: float | None = Query(None, description="Optional farmer lng"),
+    radius_km: float | None = Query(None, ge=0.1, le=500),
+    commodity: str | None = Query(None),
+    district: str | None = Query(None),
+    limit: int | None = Query(None, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    # If nearby params provided, delegate to nearby logic for consistency
+    if lat is not None and lng is not None:
+        r = radius_km if radius_km is not None else 500
+        lim = limit if limit is not None else 50
+        return nearby_centres(lat=lat, lng=lng, radius_km=r, commodity=commodity, district=district, limit=lim, db=db)
+    # Otherwise classic list with optional commodity/district filter
+    q = db.query(ProcurementCentre).filter(ProcurementCentre.is_active == True)
+    if district:
+        q = q.filter(ProcurementCentre.district.ilike(f"%{district}%"))
+    centres = q.all()
+    if commodity:
+        from app.models.procurement_centre import centre_commodities
+        from app.models.commodity import Commodity
+        comm = db.query(Commodity).filter(Commodity.name.ilike(commodity)).first()
+        if comm:
+            allowed_ids = {r[0] for r in db.query(centre_commodities.c.centre_id).filter(centre_commodities.c.commodity_id == comm.id).all()}
+            centres = [c for c in centres if c.id in allowed_ids]
+        else:
+            centres = []
     for c in centres:
         c.status = _computed_status(c, db)
+        try:
+            c.supported_commodities = [com.name for com in (c.commodities or [])]
+        except Exception:
+            c.supported_commodities = []
+        c.distance_km = None
+        c.remaining_capacity_today = None
+    if limit is not None:
+        centres = centres[:limit]
     return centres
 
+@router.get("/recommendations")
+def recommend_centres(
+    lat: float | None = Query(None, description="Farmer lat for distance scoring"),
+    lng: float | None = Query(None),
+    radius_km: float = Query(50, ge=0.1, le=500),
+    commodity: str | None = Query(None),
+    district: str | None = Query(None),
+    estimated_quantity: float = Query(10, ge=0.1, le=500),
+    limit: int = Query(10, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_optional_user),
+):
+    """
+    Transparent multi-factor centre ranking:
+    real-data-first — distance (haversine), queue size, estimated wait, occupancy, remaining capacity.
+    Farmer history (past bookings at centre, commodity match, distance) as deterministic boost (<1 better).
+    No ML hallucination: scores are explainable weighted sum, debug returned.
+    If GPS missing → distance factor ignored (weight redistributed). If insufficient history → personalized boost 1.0.
+    """
+    from app.models.queue import QueueToken, QueueStatus
+    from app.models.booking import Booking
+    from app.models.farmer import Farmer
+    from app.models.commodity import Commodity
+    from app.models.procurement_centre import centre_commodities
+
+    # Resolve farmer
+    farmer = None
+    try:
+        if current_user is not None:
+            farmer = db.query(Farmer).filter(Farmer.user_id == current_user.id).first()
+            if not farmer:
+                farmer = db.get(Farmer, current_user.id)
+    except Exception:
+        pass
+
+    # Base query
+    q = db.query(ProcurementCentre).filter(ProcurementCentre.is_active == True)
+    if district:
+        q = q.filter(ProcurementCentre.district.ilike(f"%{district}%"))
+    centres = q.all()
+
+    # Commodity pre-filter via M2M if supplied
+    if commodity:
+        comm = db.query(Commodity).filter(Commodity.name.ilike(commodity)).first()
+        if comm:
+            allowed = {r[0] for r in db.query(centre_commodities.c.centre_id).filter(centre_commodities.c.commodity_id == comm.id).all()}
+            centres = [c for c in centres if c.id in allowed]
+        else:
+            centres = []  # no such commodity
+
+    # Pre-compute for each centre
+    ranked = []
+    today = date.today()
+    for c in centres:
+        # distance
+        dist = None
+        if lat is not None and lng is not None:
+            try:
+                dist = haversine(lat, lng, c.lat, c.lng)
+                if dist > radius_km:
+                    continue
+            except Exception:
+                dist = None
+        # else no GPS: keep centre (no radius filter)
+        # queue
+        qsize = db.query(QueueToken).filter(QueueToken.centre_id == c.id, QueueToken.status.in_([QueueStatus.WAITING.value, QueueStatus.CALLED.value, QueueStatus.ARRIVED.value])).count()
+        wait = calculate_wait(qsize, c.avg_processing_minutes, c.active_counters)
+        slots = db.query(Slot).filter(Slot.centre_id == c.id, Slot.date == today).all()
+        total = sum(s.capacity for s in slots)
+        used = sum(s.booked for s in slots)
+        occ = used / total if total else 0.0
+        remaining = (total - used) if total else (c.daily_capacity or 120)
+        avail = sum(1 for s in slots if s.booked < s.capacity) if slots else (1 if c.status == "Open" else 0)
+        # next slot
+        next_slot = None
+        for s in sorted(slots, key=lambda x: x.start_time):
+            if s.booked < s.capacity and s.status != "CLOSED":
+                next_slot = {"id": s.id, "start_time": str(s.start_time), "end_time": str(s.end_time), "available": s.capacity - s.booked}
+                break
+
+        # supports commodity?
+        supports = True
+        if commodity:
+            try:
+                names = [co.name.lower() for co in (c.commodities or [])]
+                supports = commodity.lower() in names
+            except Exception:
+                supports = True
+
+        # farmer factors
+        farmer_past = 0
+        farmer_dist = dist  # reuse haversine if we have user lat/lng; else fallback to village coords
+        farmer_match = False
+        if farmer:
+            try:
+                farmer_past = db.query(Booking).filter(Booking.farmer_id == farmer.id, Booking.centre_id == c.id, Booking.status != "CANCELLED").count()
+                farmer_match = (farmer.primary_commodity or "").strip().lower() == (commodity or farmer.primary_commodity or "").strip().lower() if commodity else (farmer.primary_commodity or "").lower() in [co.lower() for co in [co.name for co in (c.commodities or [])]]
+                # if lat/lng not provided, try village coords
+                if dist is None:
+                    coords = get_farmer_coords(farmer.district, farmer.village)
+                    if coords:
+                        farmer_dist = haversine(coords[0], coords[1], c.lat, c.lng)
+            except Exception:
+                pass
+
+        # Normalized scores 0..1 lower better
+        dist_norm = min(dist or 40, 80) / 80 if dist is not None else 0.5  # 0.5 neutral if no GPS
+        queue_norm = min(qsize, 30) / 30
+        wait_norm = min(wait, 60) / 60
+        occ_norm = occ  # already 0-1
+        # supports penalty
+        support_penalty = 0 if supports else 1.0
+
+        # weights: distance 0.30, queue 0.25, wait 0.15, occupancy 0.30 (adds to 1.0)
+        # if no GPS, redistribute distance weight to queue/occ
+        if dist is None:
+            raw = 0.35 * queue_norm + 0.25 * wait_norm + 0.40 * occ_norm + support_penalty * 0.5
+        else:
+            raw = 0.30 * dist_norm + 0.25 * queue_norm + 0.15 * wait_norm + 0.30 * occ_norm + support_penalty * 0.5
+
+        # farmer boost multiplicative (<1 better)
+        boost = 1.0
+        if farmer_past >= 3:
+            boost *= 0.80
+        elif farmer_past >= 2:
+            boost *= 0.85
+        elif farmer_past >= 1:
+            boost *= 0.90
+        if farmer_match:
+            boost *= 0.92
+        if farmer_dist is not None:
+            if farmer_dist < 15:
+                boost *= 0.90
+            elif farmer_dist < 30:
+                boost *= 0.95
+
+        score = raw * boost
+        # status penalty: closed/emergency hard reject, busy mild penalty
+        status = _computed_status(c, db)
+        if status in ("Closed", "Emergency"):
+            score += 2.0  # push to bottom
+        elif status == "Busy":
+            score += 0.15
+
+        # Reason transparent
+        parts = []
+        if dist is not None:
+            parts.append(f"{dist:.1f}km")
+        parts.append(f"Queue {qsize}")
+        parts.append(f"Wait {wait}min")
+        parts.append(f"{remaining} slots left")
+        if farmer_past > 0:
+            parts.append(f"past {farmer_past} at {c.name.split(' - ')[-1].split()[0] if ' - ' in c.name else c.name.split()[0]}")
+        if farmer_match:
+            parts.append(f"{commodity or farmer.primary_commodity} match")
+        reason = " • ".join(parts)
+
+        # Attach transient for serialization
+        c.status = status
+        c.distance_km = round(dist, 2) if dist is not None else None
+        try:
+            c.supported_commodities = [co.name for co in (c.commodities or [])]
+        except Exception:
+            c.supported_commodities = []
+        c.remaining_capacity_today = remaining
+
+        ranked.append({
+            "centre": CentreOut.model_validate(c).model_dump(),
+            "score": round(score, 4),
+            "raw_score": round(raw, 4),
+            "boost": round(boost, 3),
+            "distance_km": round(dist, 2) if dist is not None else None,
+            "queue_size": qsize,
+            "estimated_wait_minutes": wait,
+            "occupancy": round(occ, 2),
+            "remaining_capacity": remaining,
+            "available_slots": avail,
+            "next_available_slot": next_slot,
+            "status": status,
+            "reason": reason,
+            "debug": {
+                "dist_norm": round(dist_norm, 3),
+                "queue_norm": round(queue_norm, 3),
+                "wait_norm": round(wait_norm, 3),
+                "occ": round(occ, 3),
+                "supports_commodity": supports,
+                "farmer_past": farmer_past,
+                "farmer_match": farmer_match,
+                "farmer_dist": round(farmer_dist, 1) if farmer_dist is not None else None,
+            },
+        })
+
+    ranked.sort(key=lambda x: (x["score"], x["distance_km"] if x["distance_km"] is not None else 999, x["centre"]["name"]))
+    # limit
+    result = ranked[:limit]
+    # add top recommendation flag
+    for i, r in enumerate(result):
+        r["is_recommended"] = (i == 0 and r["score"] < 1.5)  # threshold to avoid recommending bad centres
+    return {"count": len(result), "ranked": result, "query": {"lat": lat, "lng": lng, "radius_km": radius_km, "commodity": commodity, "estimated_quantity": estimated_quantity}}
+
 @router.get("/{centre_id}", response_model=CentreOut)
-def get_centre(centre_id: str, db: Session = Depends(get_db)):
+def get_centre(centre_id: str, lat: float | None = Query(None), lng: float | None = Query(None), db: Session = Depends(get_db)):
     c = db.get(ProcurementCentre, centre_id)
     if not c:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Centre not found"})
     c.status = _computed_status(c, db)
+    try:
+        c.supported_commodities = [com.name for com in (c.commodities or [])]
+    except Exception:
+        c.supported_commodities = []
+    if lat is not None and lng is not None:
+        try:
+            c.distance_km = round(haversine(lat, lng, c.lat, c.lng), 2)
+        except Exception:
+            c.distance_km = None
+    else:
+        c.distance_km = None
+    # remaining capacity today
+    from datetime import date as _date
+    today = _date.today()
+    slots = db.query(Slot).filter(Slot.centre_id == c.id, Slot.date == today).all()
+    total = sum(s.capacity for s in slots)
+    used = sum(s.booked for s in slots)
+    c.remaining_capacity_today = (total - used) if total else (c.daily_capacity or 120)
     return c
+
+@router.get("/{centre_id}/commodities")
+def get_centre_commodities(centre_id: str, db: Session = Depends(get_db)):
+    c = db.get(ProcurementCentre, centre_id)
+    if not c:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Centre not found"})
+    try:
+        comms = c.commodities or []
+    except Exception:
+        comms = []
+    return [{"id": co.id, "name": co.name, "code": co.code, "rate_per_quintal": co.rate_per_quintal} for co in comms]
+
+@router.get("/{centre_id}/operational")
+def get_centre_operational(centre_id: str, lat: float | None = Query(None), lng: float | None = Query(None), db: Session = Depends(get_db)):
+    # Consolidated operational data for Phase 2: queue + capacity + slots + status + distance
+    c = db.get(ProcurementCentre, centre_id)
+    if not c:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Centre not found"})
+    # reuse existing helpers
+    status_out = get_centre_status(centre_id, db)
+    cap = centre_capacity(centre_id, None, db)
+    # distance
+    dist = None
+    if lat is not None and lng is not None:
+        try:
+            dist = round(haversine(lat, lng, c.lat, c.lng), 2)
+        except Exception:
+            pass
+    # next available slot today
+    today = date.today()
+    slots = db.query(Slot).filter(Slot.centre_id == centre_id, Slot.date == today).order_by(Slot.start_time).all()
+    next_slot = None
+    for s in slots:
+        if s.booked < s.capacity and s.status != "CLOSED":
+            next_slot = {"id": s.id, "start_time": str(s.start_time), "end_time": str(s.end_time), "available": s.capacity - s.booked}
+            break
+    return {
+        "centre": CentreOut.model_validate(c).model_dump(),
+        "status": status_out,
+        "capacity": cap,
+        "distance_km": dist,
+        "next_available_slot": next_slot,
+        "supported_commodities": [{"id": co.id, "name": co.name} for co in (c.commodities or [])],
+    }
 
 @router.get("/{centre_id}/status", response_model=CentreStatusOut)
 def get_centre_status(centre_id: str, db: Session = Depends(get_db)):

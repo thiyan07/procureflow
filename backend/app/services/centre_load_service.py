@@ -30,10 +30,8 @@ def predict_centre_load(
     Returns: {level, score, reason, forecast_3d: [{date, level, expected_bookings}]}
     """
     try:
-        if historical_counts is None:
-            # synthetic demo history: Erode avg 20-30 bookings/day per centre
-            random.seed(hash(centre_id) % 1000)
-            historical_counts = [random.randint(12, 35) for _ in range(7)]
+        if historical_counts is None or len(historical_counts) == 0:
+            raise ValueError("insufficient history — no bookings")
         if len(historical_counts) < 3:
             raise ValueError("insufficient history")
 
@@ -69,16 +67,15 @@ def predict_centre_load(
             "score": round(score, 2),
             "reason": reason,
             "forecast_3d": forecast,
-            "model_info": "linear trend on 7-day synthetic history (fallback if no DB)",
+            "model_info": "linear trend on real 7-day history",
         }
     except Exception as e:
         log.warning(f"load predict fallback: {e}")
-        # fallback rule: occupancy based
-        level = "HIGH" if avg_occupancy > 0.7 else "LOW" if avg_occupancy < 0.3 else "NORMAL"
+        # honest: no synthetic — return insufficient
         return {
-            "level": level,
-            "score": round(avg_occupancy, 2),
-            "reason": f"{level} load from occupancy {avg_occupancy:.0%}",
+            "level": "UNKNOWN",
+            "score": 0.0,
+            "reason": "Prediction unavailable — insufficient history",
             "forecast_3d": [],
-            "model_info": "fallback rule",
+            "model_info": "insufficient history — no real bookings",
         }

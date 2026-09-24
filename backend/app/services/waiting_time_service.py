@@ -26,65 +26,21 @@ from app.services.scheduling_service import calculate_wait
 
 log = logging.getLogger(__name__)
 
-# Global model coefficients (trained on synthetic data at startup)
+# Global model coefficients — 100% real: no synthetic training data
+# AI disabled until real historical wait dataset is sufficient; fallback to rule-based calculate_wait()
 _model = None  # dict with weights
 _model_trained = False
 
 def _synthetic_data(n=500, seed=42):
-    """Generate synthetic demo data — clearly marked, not real user data."""
-    random.seed(seed)
-    np.random.seed(seed)
-    X = []
-    y = []
-    for _ in range(n):
-        farmers_ahead = random.randint(0, 20)
-        avg_processing = random.choice([3, 4, 3, 3])  # from real centres c1-4
-        active_counters = random.choice([2, 3, 3, 4])
-        quantity = random.uniform(5, 30)  # quintal
-        hour = random.choice([9, 10, 11, 13, 14])  # slot hours
-        centre_load = random.uniform(0.1, 0.9)  # occupancy 0-1
-        # rule-based base
-        base = calculate_wait(farmers_ahead, avg_processing, active_counters)
-        # add realistic noise: quantity factor + time factor + load
-        qty_factor = max(0, (quantity - 10) * 0.02) * base * 0.1
-        load_factor = centre_load * 2
-        hour_factor = 1 if hour in (10, 11) else 0
-        noise = random.uniform(-1, 1)
-        target = base + qty_factor + load_factor + hour_factor + noise
-        target = max(0, target)
-        # features for linear regression
-        qty_f = 1 + max(0, (quantity - 10) * 0.02)
-        X.append([farmers_ahead, avg_processing, qty_f, centre_load, hour])
-        y.append(target)
-    return np.array(X, dtype=float), np.array(y, dtype=float)
+    """Deprecated — synthetic disabled for 100% real mode."""
+    raise RuntimeError("synthetic data disabled — 100% real mode")
 
 def _train():
     global _model, _model_trained
-    if _model_trained:
-        return _model
-    if not _HAS_NUMPY:
-        log.warning("numpy missing - skipping AI training, using rule-based")
-        _model_trained = False
-        return None
-    try:
-        X, y = _synthetic_data(800)
-        # Add bias column
-        X_b = np.c_[np.ones(X.shape[0]), X]  # b0 + 5 features
-        # Normal equation: (X^T X)^-1 X^T y
-        # Use lstsq for stability
-        coeffs, residuals, rank, s = np.linalg.lstsq(X_b, y, rcond=None)
-        _model = {
-            "coeffs": coeffs,  # 6 values: b0, farmers, avg, qty, load, hour
-            "trained_on": "synthetic demo data 800 rows (Erode DPC operational ranges)",
-            "r2": _r2(X_b, y, coeffs),
-        }
-        _model_trained = True
-        log.info(f"AI waiting-time model trained (synthetic) R2={_model['r2']:.3f} coeffs={coeffs.round(3)}")
-        return _model
-    except Exception as e:
-        log.warning(f"AI training failed, fallback to rule-based: {e}")
-        _model_trained = False
-        return None
+    # 100% real — do not train on synthetic demo data
+    log.info("AI waiting-time model disabled — 100% real mode, using rule-based calculate_wait")
+    _model_trained = False
+    return None
 
 def _r2(X_b, y, coeffs):
     y_pred = X_b @ coeffs

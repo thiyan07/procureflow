@@ -7,6 +7,7 @@ import '../../features/farmer/presentation/farmer_home_screen.dart';
 import '../../features/farmer/presentation/profile_screen.dart';
 import '../../features/farmer/presentation/settings_screen.dart';
 import '../../features/procurement_centres/presentation/centres_screen.dart';
+import '../../features/procurement_centres/presentation/centre_details_screen.dart';
 import '../../features/slots/presentation/slot_booking_screen.dart';
 import '../../features/queue/presentation/token_screen.dart';
 import '../../features/queue/presentation/queue_screen.dart';
@@ -34,6 +35,15 @@ class AppRouter {
       GoRoute(path: '/', builder: (c, s) => const FarmerHomeScreen()),
       GoRoute(path: '/home', builder: (c, s) => const FarmerHomeScreen()),
       GoRoute(path: '/centres', builder: (c, s) => const CentresScreen()),
+      GoRoute(
+        path: '/centres/:id',
+        builder: (c, s) {
+          final id = s.pathParameters['id']!;
+          final lat = double.tryParse(s.uri.queryParameters['lat'] ?? '');
+          final lng = double.tryParse(s.uri.queryParameters['lng'] ?? '');
+          return CentreDetailsScreen(centreId: id, userLat: lat, userLng: lng);
+        },
+      ),
       // Booking aliases: spec /booking and legacy /slots
       GoRoute(path: '/booking', builder: (c, s) => const SlotBookingScreen()),
       GoRoute(path: '/slots', builder: (c, s) => const SlotBookingScreen()),
