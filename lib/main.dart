@@ -27,13 +27,11 @@ Future<void> main() async {
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     } catch (_) {}
   }
-  try {
-    await FCMService.instance.initialize();
-  } catch (_) {}
-  // Wire router for notification tap deep-links
-  try {
-    FCMService.setRouter(AppRouter.router);
-  } catch (_) {}
+  // Skip FCM init on boot to avoid blocking first frame (init after runApp)
+  Future.delayed(const Duration(seconds: 2), () async {
+    try { await FCMService.instance.initialize(); } catch (_) {}
+    try { FCMService.setRouter(AppRouter.router); } catch (_) {}
+  });
   runApp(const ProviderScope(child: ProcureFlowApp()));
 }
 
