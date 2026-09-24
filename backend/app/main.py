@@ -61,10 +61,9 @@ def root():
 
 @app.on_event("startup")
 def on_startup():
-    # do not auto-create in prod; rely on alembic. For dev, ensure tables exist.
-    if settings.is_dev:
-        try:
-            Base.metadata.create_all(bind=engine)
-            log.info("DB tables ensured (dev mode)")
-        except Exception as e:
-            log.warning(f"DB create_all failed (maybe no DB): {e}")
+    # ensure tables exist even in prod fallback (SQLite) so /health works; alembic is primary for Postgres
+    try:
+        Base.metadata.create_all(bind=engine)
+        log.info(f"DB tables ensured (env={settings.environment}, db={str(engine.url)[:30]}...)")
+    except Exception as e:
+        log.warning(f"DB create_all failed (maybe no DB): {e}")
