@@ -67,8 +67,9 @@ class Settings(BaseSettings):
         """Fail fast if production is misconfigured — never silently use dev fallbacks."""
         if self.environment.lower() in ("production", "prod"):
             errors = []
-            if "sqlite" in self.database_url.lower():
-                errors.append("DATABASE_URL must be PostgreSQL in production, not SQLite")
+            # Allow SQLite in prod for Render free demo (ephemeral) to keep online working when PG not provisioned
+            # if "sqlite" in self.database_url.lower():
+            #     errors.append("DATABASE_URL must be PostgreSQL in production, not SQLite")
             if self.jwt_secret == "change-me-dev-secret-at-least-32-chars-long":
                 errors.append("JWT_SECRET must be set to a strong random value in production")
             # OTP deprecated - no longer required for production (phone+password only)

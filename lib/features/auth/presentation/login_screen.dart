@@ -35,16 +35,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final repo = ref.read(authRepositoryProvider);
-      final user = await repo.loginWithMobileAndPassword(_mobileCtrl.text.trim(), _passwordCtrl.text);
+      final user = await repo.loginWithMobileAndPassword(_mobileCtrl.text.trim(), _passwordCtrl.text).timeout(const Duration(seconds: 60), onTimeout: () => throw Exception('Server waking up (Render cold start) — took >60s. Please tap Login again in 10s. If still fails, check https://procureflow-api.onrender.com/health'));
       if (!mounted) return;
+      setState(() => _loading = false);
       if (user.role == 'CENTRE_OPERATOR') {
         context.go('/operator');
       } else {
         context.go('/');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceAll('Exception:', '').trim();
+        var msg = e.toString().replaceAll('Exception:', '').trim();
+        if (msg.contains('TimeoutException') || msg.contains('Future not completed')) {
+          msg = 'Server waking up (Render cold start) — please wait 30s and tap Login again';
+        } else if (msg.contains('SocketException') || msg.contains('Connection refused') || msg.contains('Failed host lookup')) {
+          msg = 'Network error — cannot reach online server. Check internet. Local fallback: adb reverse tcp:8000 tcp:8000 + http://127.0.0.1:8000';
+        } else if (msg.contains('ClientException')) {
+          msg = msg.replaceAll('ClientException:', '').trim();
+          if (msg.contains('Connection refused')) msg = 'Online server waking up — please retry in 30s (Render cold start)';
+        }
+        _error = msg;
         _loading = false;
       });
     }
